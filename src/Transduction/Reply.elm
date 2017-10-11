@@ -1,4 +1,16 @@
-module Transduction.Reply exposing (Reply(Continue, Halt), map, andThen, halt)
+module Transduction.Reply
+    exposing
+        ( Reply
+        , halt
+        , continue
+        , map
+        , mapContinue
+        , andThen
+        , andThenContinue
+        , isHalted
+        , toHalt
+        , state
+        )
 
 {-| Building your own advanced transducers or steppers usually requires manually handling init and step replies.
 
@@ -14,6 +26,16 @@ type Reply state
     | Halt state
 
 
+halt : a -> Reply a
+halt =
+    Halt
+
+
+continue : a -> Reply a
+continue =
+    Continue
+
+
 map : (a -> b) -> Reply a -> Reply b
 map f x =
     case x of
@@ -24,25 +46,65 @@ map f x =
             Continue (f state)
 
 
+mapContinue : (a -> a) -> Reply a -> Reply a
+mapContinue f reply =
+    case reply of
+        Continue state ->
+            Continue (f state)
+
+        _ ->
+            reply
+
+
 {-| This ensures that Halt states remain Halt while giving the option of switching to Halt.
 -}
 andThen : (a -> Reply b) -> Reply a -> Reply b
 andThen f x =
     case x of
         Halt state ->
-            halt (f state)
+            toHalt (f state)
 
         Continue state ->
             f state
 
 
+andThenContinue : (a -> Reply a) -> Reply a -> Reply a
+andThenContinue f reply =
+    case reply of
+        Continue state ->
+            f state
+
+        _ ->
+            reply
+
+
+isHalted : Reply a -> Bool
+isHalted reply =
+    case reply of
+        Continue _ ->
+            False
+
+        Halt _ ->
+            True
+
+
 {-| Sets reply to Halt.
 -}
-halt : Reply a -> Reply a
-halt reply =
+toHalt : Reply a -> Reply a
+toHalt reply =
     case reply of
         Continue state ->
             Halt state
 
         _ ->
             reply
+
+
+state : Reply state -> state
+state reply =
+    case reply of
+        Continue state ->
+            state
+
+        Halt state ->
+            state

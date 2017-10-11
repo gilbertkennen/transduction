@@ -3,7 +3,7 @@ module Transduction.Collection.List exposing (reducer, stepper)
 {-| Implementations for `List`
 -}
 
-import Transduction.Reply exposing (Reply(Halt, Continue))
+import Transduction.Reply as Reply exposing (Reply)
 import Transduction exposing (Reducer(Reducer), Stepper)
 
 
@@ -17,14 +17,12 @@ reducer =
 
 stepper : Stepper state (List a) a
 stepper f state xs =
-    case xs of
-        [] ->
-            state
+    if Reply.isHalted state then
+        state
+    else
+        case xs of
+            [] ->
+                state
 
-        x :: rest ->
-            case f x state of
-                Halt newState ->
-                    newState
-
-                Continue newState ->
-                    stepList f newState rest
+            x :: rest ->
+                stepper f (Reply.andThenContinue (f x) state) rest

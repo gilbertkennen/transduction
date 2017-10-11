@@ -13,7 +13,7 @@ module Transduction
 {-| An Elm experiment in transducers. The purpose of transducers is to create composable elements which work on collections in powerful ways.
 -}
 
-import Transduction.Reply as Reply exposing (Reply(Continue, Halt))
+import Transduction.Reply as Reply exposing (Reply)
 
 
 {-| The `reduce` function needs a `Reducer`. This is a triple of:
@@ -39,19 +39,14 @@ type alias Transducer state1 state2 result1 result2 a b =
 {-| A stepper is a function which applies the step function successively to each element of the collection. This could be trivially implemented using `foldl`, but this gives the flexibility of implementing early termination based on the `Reply`.
 -}
 type alias Stepper state collection a =
-    (a -> state -> Reply state) -> state -> collection -> state
+    (a -> state -> Reply state) -> Reply state -> collection -> Reply state
 
 
 {-| Where the magic happens. Takes a `Stepper` and a `Reducer` to make a function which reduces the collection.
 -}
 reduce : Stepper state collection a -> Reducer state result a -> collection -> result
-reduce reduction (Reducer init step finish) collection =
-    case init of
-        Halt state ->
-            finish state
-
-        Continue state ->
-            reduction step state collection |> finish
+reduce stepper (Reducer init step finish) collection =
+    stepper step init collection |> Reply.state |> finish
 
 
 map : (a -> b) -> Transducer state state result result a b
@@ -72,7 +67,7 @@ statefulMap init1 step1 (Reducer init2 step2 finish2) =
         (\x ( state1, state2 ) ->
             case step1 x state1 of
                 Err newState1 ->
-                    Halt ( newState1, state2 )
+                    Reply.halt ( newState1, state2 )
 
                 Ok ( newX, newState1 ) ->
                     Reply.map ((,) newState1) (step2 newX state2)
@@ -91,9 +86,9 @@ take n (Reducer init step finish) =
         (Reply.andThen
             (\state ->
                 if n <= 0 then
-                    Halt ( n, state )
+                    Reply.halt ( n, state )
                 else
-                    Continue ( n, state )
+                    Reply.continue ( n, state )
             )
             init
         )
@@ -101,10 +96,15 @@ take n (Reducer init step finish) =
             Reply.andThen
                 (\newState ->
                     if m <= 1 then
-                        Halt ( m - 1, newState )
+                        Reply.halt ( m - 1, newState )
                     else
-                        Continue ( m - 1, newState )
+                        Reply.continue ( m - 1, newState )
                 )
                 (step x state)
         )
         (finish << Tuple.second)
+
+
+
+-- andThen : Stepper state collection b -> state -> Transducer state state result result collection b
+-- andThen stepper init =
