@@ -21,10 +21,13 @@ module Transduction
 import Transduction.Reply as Reply exposing (Reply)
 
 
-{-| The `reduce` function needs a `Reducer`. This is a triple of:
+{-| The titular data structure. These can be composed together in chains.
 -}
-type alias Reducer state result input =
-    Transducer state () result () input ()
+type Transducer transducerState reducerState transducerResult reducerResult transducerInput reducerInput
+    = Transducer
+        (TransducerTriple reducerState reducerResult reducerInput
+         -> TransducerTriple transducerState transducerResult transducerInput
+        )
 
 
 type alias TransducerTriple state result input =
@@ -36,16 +39,10 @@ type alias TransducerTriple state result input =
     )
 
 
-{-| The titular data structure is just a function which wraps itself around a `Reducer`. Transducers compose like normal functions using `(<<)` and `(>>)`. Note that the direction of the arrows is the **opposite** of the flow of collection values.
-
-A `Transducer` will eventually be wrapped around a `Reducer`, so we need to know types for both 'ends' of the transducer.
-
+{-| A `Reducer` is just a `Transducer` which effectively doesn't interact with anything after it. Defining it this way makes composition easier.
 -}
-type Transducer transducerState reducerState transducerResult reducerResult transducerInput reducerInput
-    = Transducer
-        (TransducerTriple reducerState reducerResult reducerInput
-         -> TransducerTriple transducerState transducerResult transducerInput
-        )
+type alias Reducer state result input =
+    Transducer state () result () input ()
 
 
 {-| A stepper is a function which applies the step function successively to each element of the collection. This could be trivially implemented using `foldl`, but this gives the flexibility of implementing early termination based on the `Reply`.
@@ -103,11 +100,11 @@ reducer init step finish =
 {-| If you have two transducers you can merge them into one.
 -}
 compose :
-    Transducer transducerState intermediateState transducerResult intermediateResult a b
-    -> Transducer intermediateState reducerState intermediateResult reducerResult b c
+    Transducer intermediateState reducerState intermediateResult reducerResult b c
+    -> Transducer transducerState intermediateState transducerResult intermediateResult a b
     -> Transducer transducerState reducerState transducerResult reducerResult a c
 compose (Transducer transducer1) (Transducer transducer2) =
-    Transducer (transducer1 << transducer2)
+    Transducer (transducer1 >> transducer2)
 
 
 map : (a -> b) -> Transducer state state result result a b
