@@ -1,9 +1,13 @@
 module Transduction
     exposing
-        ( Reducer(Reducer)
+        ( Reducer
         , Transducer
         , Stepper
         , reduce
+        , reducer
+        , transducer
+        , compose
+        , apply
         , map
         , statefulMap
         , take
@@ -17,23 +21,21 @@ import Transduction.Reply as Reply exposing (Reply)
 
 
 {-| The `reduce` function needs a `Reducer`. This is a triple of:
-
-  - Initial `Reply` state (can be `Halt` to stop before you begin.)
-  - A step function which updates the state based on an element from the collection.
-  - A final clean-up step.
-
 -}
-type Reducer state result a
-    = Reducer (Reply state) (a -> state -> Reply state) (state -> result)
+type Reducer state result input
+    = Reducer (Reply state) (input -> state -> Reply state) (state -> result)
 
 
 {-| The titular data structure is just a function which wraps itself around a `Reducer`. Transducers compose like normal functions using `(<<)` and `(>>)`. Note that the direction of the arrows is the **opposite** of the flow of collection values.
 
-The type variables are arranged as pairs of state, result, and values. The left of the pair is the type expected to be inserted and the right of the pair is the type handed to the `Reducer` that is wrapped.
+A `Transducer` will eventually be wrapped around a `Reducer`, so we need to know types for both 'ends' of the transducer.
 
 -}
-type alias Transducer state1 state2 result1 result2 a b =
-    Reducer state2 result2 b -> Reducer state1 result1 a
+type Transducer transducerState reducerState transducerResult reducerResult transducerInput reducerInput
+    = Transducer
+        (Reducer reducerState reducerResult reducerInput
+         -> Reducer transducerState transducerResult transducerInput
+        )
 
 
 {-| A stepper is a function which applies the step function successively to each element of the collection. This could be trivially implemented using `foldl`, but this gives the flexibility of implementing early termination based on the `Reply`.
@@ -49,30 +51,77 @@ reduce stepper (Reducer init step finish) collection =
     stepper step init collection |> Reply.state |> finish
 
 
-map : (a -> b) -> Transducer state state result result a b
-map f (Reducer init step finish) =
+{-| Make your own `Transducer`. Takes three functions.
+
+  - The first transforms a reducer's initial value.
+  - The second transforms a reducer's step function.
+  - The third transforms a reducer's finish function.
+
+-}
+transducer :
+    (Reply reducerState -> Reply transducerState)
+    -> ((reducerInput -> reducerState -> Reply reducerState) -> transducerInput -> transducerState -> Reply transducerState)
+    -> ((reducerState -> reducerResult) -> transducerState -> transducerResult)
+    -> Transducer transducerState reducerState transducerResult reducerResult transducerInput reducerInput
+transducer initF stepF finishF =
+    Transducer (\(Reducer init step finish) -> reducer (initF init) (stepF step) (finishF finish))
+
+
+{-| Make your own `Reducer`. Composed of:
+
+  - Initial `Reply` state (can be `Halt` to stop before you begin).
+  - A step function which updates the state based on an element from the collection.
+  - A final clean-up step.
+
+-}
+reducer : Reply state -> (input -> state -> Reply state) -> (state -> result) -> Reducer state result input
+reducer =
     Reducer
-        init
-        (step << f)
-        finish
+
+
+{-| If you have two transducers you can merge them into one.
+-}
+compose :
+    Transducer transducerState intermediateState transducerResult intermediateResult a b
+    -> Transducer intermediateState reducerState intermediateResult reducerResult b c
+    -> Transducer transducerState reducerState transducerResult reducerResult a c
+compose (Transducer transducer1) (Transducer transducer2) =
+    Transducer (transducer1 << transducer2)
+
+
+{-| Eventually your `Transducer` needs to have a base `Reducer` turning it into a `Reducer` of its own.
+-}
+apply :
+    Transducer transducerState reducerState transducerResult reducerResult a b
+    -> Reducer reducerState reducerResult b
+    -> Reducer transducerState transducerResult a
+apply (Transducer transducer) reducer =
+    transducer reducer
+
+
+map : (a -> b) -> Transducer state state result result a b
+map f =
+    transducer identity ((>>) f) identity
 
 
 statefulMap :
-    thisState
-    -> (a -> thisState -> Result thisState ( b, thisState ))
-    -> Transducer ( thisState, thatState ) thatState result result a b
-statefulMap init1 step1 (Reducer init2 step2 finish2) =
-    Reducer
-        (Reply.map ((,) init1) init2)
-        (\x ( state1, state2 ) ->
-            case step1 x state1 of
-                Err newState1 ->
-                    Reply.halt ( newState1, state2 )
+    transducerState
+    -> (a -> transducerState -> Result transducerState ( b, transducerState ))
+    -> Transducer ( transducerState, reducerState ) reducerState result result a b
+statefulMap init1 step1 =
+    transducer
+        (\init2 -> Reply.map ((,) init1) init2)
+        (\step2 ->
+            (\x ( state1, state2 ) ->
+                case step1 x state1 of
+                    Err newState1 ->
+                        Reply.halt ( newState1, state2 )
 
-                Ok ( newX, newState1 ) ->
-                    Reply.map ((,) newState1) (step2 newX state2)
+                    Ok ( newX, newState1 ) ->
+                        Reply.map ((,) newState1) (step2 newX state2)
+            )
         )
-        (finish2 << Tuple.second)
+        ((>>) Tuple.second)
 
 
 withIndex : Transducer ( Int, state ) state result result a ( Int, a )
@@ -81,18 +130,19 @@ withIndex =
 
 
 take : Int -> Transducer ( Int, state ) state result result a a
-take n (Reducer init step finish) =
-    Reducer
-        (Reply.andThen
-            (\state ->
-                if n <= 0 then
-                    Reply.halt ( n, state )
-                else
-                    Reply.continue ( n, state )
-            )
-            init
+take n =
+    transducer
+        (\init ->
+            Reply.andThen
+                (\state ->
+                    if n <= 0 then
+                        Reply.halt ( n, state )
+                    else
+                        Reply.continue ( n, state )
+                )
+                init
         )
-        (\x ( m, state ) ->
+        (\step x ( m, state ) ->
             Reply.andThen
                 (\newState ->
                     if m <= 1 then
@@ -102,9 +152,15 @@ take n (Reducer init step finish) =
                 )
                 (step x state)
         )
-        (finish << Tuple.second)
+        ((>>) Tuple.second)
 
 
 
+-- withCount : Transducer ( Int, state ) state ( Int, result ) result a a
+-- withCount (Reducer init step finish) =
+--     Reducer
+--         (Reply.map ((,) 0) init)
+--         (\x ( n, state ) -> Reply.map ((,) (n + 1)) (step n state))
+--         (\( n, state ) -> ( n, finish state ))
 -- andThen : Stepper state collection b -> state -> Transducer state state result result collection b
 -- andThen stepper init =

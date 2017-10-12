@@ -4,14 +4,14 @@ module Transduction.Collection.List exposing (reducer, stepper)
 -}
 
 import Transduction.Reply as Reply exposing (Reply)
-import Transduction exposing (Reducer(Reducer), Stepper)
+import Transduction exposing (Reducer, Stepper)
 
 
 reducer : Reducer (List a) (List a) a
 reducer =
-    Reducer
-        (Continue [])
-        (\x state -> Continue (x :: state))
+    Transduction.reducer
+        (Reply.continue [])
+        (\x state -> Reply.continue (x :: state))
         List.reverse
 
 
