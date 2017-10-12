@@ -39,7 +39,7 @@ type alias TransducerTriple state result input =
     )
 
 
-{-| A `Reducer` is just a `Transducer` which effectively doesn't interact with anything after it. Defining it this way makes composition easier.
+{-| A `Reducer` is just a `Transducer` which effectively doesn't interact with anything after it. Defining it this way makes composition easier, just use `compose`.
 -}
 type alias Reducer state result input =
     Transducer state () result () input ()
