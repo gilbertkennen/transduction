@@ -12,6 +12,8 @@ module Transduction
         , statefulMap
         , take
         , withIndex
+        , withCount
+        , concat
         )
 
 {-| An Elm experiment in transducers. The purpose of transducers is to create composable elements which work on collections in powerful ways.
@@ -155,12 +157,19 @@ take n =
         ((>>) Tuple.second)
 
 
+withCount : Transducer ( Int, state ) state ( Int, result ) result a a
+withCount =
+    transducer
+        (Reply.map ((,) 0))
+        (\step x ( n, state ) -> Reply.map ((,) (n + 1)) (step x state))
+        Tuple.mapSecond
 
--- withCount : Transducer ( Int, state ) state ( Int, result ) result a a
--- withCount (Reducer init step finish) =
---     Reducer
---         (Reply.map ((,) 0) init)
---         (\x ( n, state ) -> Reply.map ((,) (n + 1)) (step n state))
---         (\( n, state ) -> ( n, finish state ))
--- andThen : Stepper state collection b -> state -> Transducer state state result result collection b
--- andThen stepper init =
+
+concat : Stepper state collection b -> Transducer state state result result collection b
+concat stepper =
+    transducer
+        identity
+        (\step collection state ->
+            stepper step (Reply.continue state) collection
+        )
+        identity
