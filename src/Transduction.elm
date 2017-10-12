@@ -7,7 +7,6 @@ module Transduction
         , reducer
         , transducer
         , compose
-        , apply
         , map
         , statefulMap
         , take
@@ -24,8 +23,17 @@ import Transduction.Reply as Reply exposing (Reply)
 
 {-| The `reduce` function needs a `Reducer`. This is a triple of:
 -}
-type Reducer state result input
-    = Reducer (Reply state) (input -> state -> Reply state) (state -> result)
+type alias Reducer state result input =
+    Transducer state () result () input ()
+
+
+type alias TransducerTriple state result input =
+    ( Reply state
+    , input
+      -> state
+      -> Reply state
+    , state -> result
+    )
 
 
 {-| The titular data structure is just a function which wraps itself around a `Reducer`. Transducers compose like normal functions using `(<<)` and `(>>)`. Note that the direction of the arrows is the **opposite** of the flow of collection values.
@@ -35,8 +43,8 @@ A `Transducer` will eventually be wrapped around a `Reducer`, so we need to know
 -}
 type Transducer transducerState reducerState transducerResult reducerResult transducerInput reducerInput
     = Transducer
-        (Reducer reducerState reducerResult reducerInput
-         -> Reducer transducerState transducerResult transducerInput
+        (TransducerTriple reducerState reducerResult reducerInput
+         -> TransducerTriple transducerState transducerResult transducerInput
         )
 
 
@@ -49,8 +57,19 @@ type alias Stepper state collection a =
 {-| Where the magic happens. Takes a `Stepper` and a `Reducer` to make a function which reduces the collection.
 -}
 reduce : Stepper state collection a -> Reducer state result a -> collection -> result
-reduce stepper (Reducer init step finish) collection =
-    stepper step init collection |> Reply.state |> finish
+reduce stepper (Transducer reducer) collection =
+    let
+        unit : TransducerTriple () () ()
+        unit =
+            ( (Reply.continue ())
+            , (\() () -> Reply.continue ())
+            , (\() -> ())
+            )
+
+        ( init, step, finish ) =
+            reducer unit
+    in
+        stepper step init collection |> Reply.state |> finish
 
 
 {-| Make your own `Transducer`. Takes three functions.
@@ -66,7 +85,7 @@ transducer :
     -> ((reducerState -> reducerResult) -> transducerState -> transducerResult)
     -> Transducer transducerState reducerState transducerResult reducerResult transducerInput reducerInput
 transducer initF stepF finishF =
-    Transducer (\(Reducer init step finish) -> reducer (initF init) (stepF step) (finishF finish))
+    Transducer (\( init, step, finish ) -> ( initF init, stepF step, finishF finish ))
 
 
 {-| Make your own `Reducer`. Composed of:
@@ -77,8 +96,8 @@ transducer initF stepF finishF =
 
 -}
 reducer : Reply state -> (input -> state -> Reply state) -> (state -> result) -> Reducer state result input
-reducer =
-    Reducer
+reducer init step finish =
+    Transducer (\_ -> ( init, step, finish ))
 
 
 {-| If you have two transducers you can merge them into one.
@@ -89,16 +108,6 @@ compose :
     -> Transducer transducerState reducerState transducerResult reducerResult a c
 compose (Transducer transducer1) (Transducer transducer2) =
     Transducer (transducer1 << transducer2)
-
-
-{-| Eventually your `Transducer` needs to have a base `Reducer` turning it into a `Reducer` of its own.
--}
-apply :
-    Transducer transducerState reducerState transducerResult reducerResult a b
-    -> Reducer reducerState reducerResult b
-    -> Reducer transducerState transducerResult a
-apply (Transducer transducer) reducer =
-    transducer reducer
 
 
 map : (a -> b) -> Transducer state state result result a b
