@@ -117,6 +117,11 @@ transducerSuite =
                 \n xs ->
                     listReduce (Trans.take n |> Trans.compose (expectReducer (List.take n xs))) xs
             ]
+        , describe "drop transducer"
+            [ fuzz2 int (list int) "should skip the first n elements" <|
+                \n xs ->
+                    listReduce (Trans.drop n |> Trans.compose (expectReducer (List.drop n xs))) xs
+            ]
         , describe "concat transducer"
             [ fuzz (list (list int)) "should send elements in order, deconstructing one level of `List`" <|
                 \xs ->

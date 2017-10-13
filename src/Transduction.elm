@@ -10,6 +10,7 @@ module Transduction
         , map
         , statefulMap
         , take
+        , drop
         , withIndex
         , withCount
         , concat
@@ -32,7 +33,7 @@ Transducers defined here will always try to do as much as possible to reduce the
 
 # Transducers
 
-@docs map, statefulMap, take, withIndex, withCount, concat
+@docs map, statefulMap, take, drop, withIndex, withCount, concat
 
 -}
 
@@ -192,6 +193,21 @@ take n =
                         Reply.continue ( m - 1, newState )
                 )
                 (step x state)
+        )
+        ((>>) Tuple.second)
+
+
+{-| Skip the first n elements. Negatives count as 0.
+-}
+drop : Int -> Transducer afterState input result ( Int, afterState ) input result
+drop n =
+    transducer
+        (Reply.map ((,) n))
+        (\step x ( m, state ) ->
+            if m <= 0 then
+                Reply.map ((,) m) (step x state)
+            else
+                Reply.continue ( m - 1, state )
         )
         ((>>) Tuple.second)
 
