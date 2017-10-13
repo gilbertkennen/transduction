@@ -1,13 +1,16 @@
 module Transduction.Collection.List exposing (reducer, stepper)
 
 {-| Implementations for `List`
+@docs reducer stepper
 -}
 
 import Transduction.Reply as Reply exposing (Reply)
 import Transduction exposing (Reducer, Stepper)
 
 
-reducer : Reducer (List a) (List a) a
+{-| A `Reducer` which builds an ordered list of elements.
+-}
+reducer : Reducer (List a) a (List a)
 reducer =
     Transduction.reducer
         (Reply.continue [])
@@ -15,6 +18,8 @@ reducer =
         List.reverse
 
 
+{-| A `Stepper` which sends elements into the step function until a `Halt` or empty list.
+-}
 stepper : Stepper state (List a) a
 stepper f state xs =
     if Reply.isHalted state then

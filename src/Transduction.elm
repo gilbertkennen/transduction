@@ -16,6 +16,24 @@ module Transduction
         )
 
 {-| An Elm experiment in transducers. The purpose of transducers is to create composable elements which work on collections in powerful ways.
+
+Transducers defined here will always try to do as much as possible to reduce the number of elements taken from the collection.
+
+
+# Types
+
+@docs Transducer, Reducer, Stepper
+
+
+# Basic Transducer Functions
+
+@docs reduce, transducer, reducer, compose
+
+
+# Transducers
+
+@docs map, statefulMap, take, withIndex, withCount, concat
+
 -}
 
 import Transduction.Reply as Reply exposing (Reply)
@@ -23,14 +41,14 @@ import Transduction.Reply as Reply exposing (Reply)
 
 {-| The titular data structure. These can be composed together in chains.
 -}
-type Transducer transducerState reducerState transducerResult reducerResult transducerInput reducerInput
+type Transducer afterState afterInput afterResult thisState thisInput thisResult
     = Transducer
-        (TransducerTriple reducerState reducerResult reducerInput
-         -> TransducerTriple transducerState transducerResult transducerInput
+        (TransducerTriple afterState afterInput afterResult
+         -> TransducerTriple thisState thisInput thisResult
         )
 
 
-type alias TransducerTriple state result input =
+type alias TransducerTriple state input result =
     ( Reply state
     , input
       -> state
@@ -41,19 +59,19 @@ type alias TransducerTriple state result input =
 
 {-| A `Reducer` is just a `Transducer` which effectively doesn't interact with anything after it. Defining it this way makes composition easier, just use `compose`.
 -}
-type alias Reducer state result input =
-    Transducer state () result () input ()
+type alias Reducer state input result =
+    Transducer () () () state input result
 
 
 {-| A stepper is a function which applies the step function successively to each element of the collection. This could be trivially implemented using `foldl`, but this gives the flexibility of implementing early termination based on the `Reply`.
 -}
-type alias Stepper state collection a =
-    (a -> state -> Reply state) -> Reply state -> collection -> Reply state
+type alias Stepper state collection element =
+    (element -> state -> Reply state) -> Reply state -> collection -> Reply state
 
 
 {-| Where the magic happens. Takes a `Stepper` and a `Reducer` to make a function which reduces the collection.
 -}
-reduce : Stepper state collection a -> Reducer state result a -> collection -> result
+reduce : Stepper state collection input -> Reducer state input result -> collection -> result
 reduce stepper (Transducer reducer) collection =
     let
         unit : TransducerTriple () () ()
@@ -77,10 +95,10 @@ reduce stepper (Transducer reducer) collection =
 
 -}
 transducer :
-    (Reply reducerState -> Reply transducerState)
-    -> ((reducerInput -> reducerState -> Reply reducerState) -> transducerInput -> transducerState -> Reply transducerState)
-    -> ((reducerState -> reducerResult) -> transducerState -> transducerResult)
-    -> Transducer transducerState reducerState transducerResult reducerResult transducerInput reducerInput
+    (Reply afterState -> Reply thisState)
+    -> ((afterInput -> afterState -> Reply afterState) -> thisInput -> thisState -> Reply thisState)
+    -> ((afterState -> afterResult) -> thisState -> thisResult)
+    -> Transducer afterState afterInput afterResult thisState thisInput thisResult
 transducer initF stepF finishF =
     Transducer (\( init, step, finish ) -> ( initF init, stepF step, finishF finish ))
 
@@ -92,52 +110,67 @@ transducer initF stepF finishF =
   - A final clean-up step.
 
 -}
-reducer : Reply state -> (input -> state -> Reply state) -> (state -> result) -> Reducer state result input
+reducer :
+    Reply state
+    -> (input -> state -> Reply state)
+    -> (state -> result)
+    -> Reducer state input result
 reducer init step finish =
     Transducer (\_ -> ( init, step, finish ))
 
 
 {-| If you have two transducers you can merge them into one.
+
+Don't let the long type definition intimidate you, there is nothing tricky going on. The order of the two parameters is the reverse order of the final `Transducer` and the types need to just line up given that ordering.
+
+The parameters are in this order to make `|>` chaining easier. `foo |> compose bar |> compose baz` produces a `Transducer` in the order foo, bar, baz.
+
 -}
 compose :
-    Transducer intermediateState reducerState intermediateResult reducerResult b c
-    -> Transducer transducerState intermediateState transducerResult intermediateResult a b
-    -> Transducer transducerState reducerState transducerResult reducerResult a c
+    Transducer afterState afterInput afterResult betweenState betweenInput betweenResult
+    -> Transducer betweenState betweenInput betweenResult thisState thisInput thisResult
+    -> Transducer afterState afterInput afterResult thisState thisInput thisResult
 compose (Transducer transducer1) (Transducer transducer2) =
     Transducer (transducer1 >> transducer2)
 
 
-map : (a -> b) -> Transducer state state result result a b
+{-| Maps the collection's element values, not the result.
+-}
+map : (thisInput -> afterInput) -> Transducer state afterInput result state thisInput result
 map f =
     transducer identity ((>>) f) identity
 
 
+{-| Sometimes you need to remember a bit of state while mapping.
+-}
 statefulMap :
-    transducerState
-    -> (a -> transducerState -> Result transducerState ( b, transducerState ))
-    -> Transducer ( transducerState, reducerState ) reducerState result result a b
+    thisState
+    -> (thisInput -> thisState -> ( afterInput, thisState ))
+    -> Transducer afterState afterInput result ( thisState, afterState ) thisInput result
 statefulMap init1 step1 =
     transducer
         (\init2 -> Reply.map ((,) init1) init2)
         (\step2 ->
             (\x ( state1, state2 ) ->
-                case step1 x state1 of
-                    Err newState1 ->
-                        Reply.halt ( newState1, state2 )
-
-                    Ok ( newX, newState1 ) ->
-                        Reply.map ((,) newState1) (step2 newX state2)
+                step1 x state1
+                    |> (\( newX, newState1 ) ->
+                            Reply.map ((,) newState1) (step2 newX state2)
+                       )
             )
         )
         ((>>) Tuple.second)
 
 
-withIndex : Transducer ( Int, state ) state result result a ( Int, a )
+{-| Include an index with each element.
+-}
+withIndex : Transducer afterState ( Int, thisInput ) result ( Int, afterState ) thisInput result
 withIndex =
-    statefulMap 0 (\x n -> Ok ( ( n, x ), n + 1 ))
+    statefulMap 0 (\x n -> ( ( n, x ), n + 1 ))
 
 
-take : Int -> Transducer ( Int, state ) state result result a a
+{-| Stop the iteration after the specified number of elements.
+-}
+take : Int -> Transducer afterState input result ( Int, afterState ) input result
 take n =
     transducer
         (\init ->
@@ -163,7 +196,9 @@ take n =
         ((>>) Tuple.second)
 
 
-withCount : Transducer ( Int, state ) state ( Int, result ) result a a
+{-| Attach a count of elements to the final result.
+-}
+withCount : Transducer afterState input afterResult ( Int, afterState ) input ( Int, afterResult )
 withCount =
     transducer
         (Reply.map ((,) 0))
@@ -171,7 +206,11 @@ withCount =
         Tuple.mapSecond
 
 
-concat : Stepper state collection b -> Transducer state state result result collection b
+{-| Given an appropriate `Stepper` function, deconstruct each collection passed in and pass elements down instead.
+-}
+concat :
+    Stepper state collection afterInput
+    -> Transducer state afterInput result state collection result
 concat stepper =
     transducer
         identity
