@@ -33,8 +33,8 @@ expectReducer xs =
                         else
                             fail <| "Was given " ++ toString x ++ " but expected " ++ toString y
 
-                    Err _ ->
-                        fail "Received a failure state. This shouldn't happen."
+                    Err err ->
+                        fail err
         )
         (\state ->
             case state of
