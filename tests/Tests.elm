@@ -9,6 +9,15 @@ import Transduction.Collection.List as TCList
 import List.Extra
 
 
+(|->) :
+    Trans.Transducer betweenState betweenInput betweenResult thisState thisInput thisResult
+    -> Trans.Transducer afterState afterInput afterResult betweenState betweenInput betweenResult
+    -> Trans.Transducer afterState afterInput afterResult thisState thisInput thisResult
+(|->) =
+    flip Trans.compose
+infixr 8 |->
+
+
 listReduce : Trans.Reducer state input result -> List input -> result
 listReduce =
     Trans.reduce TCList.stepper
@@ -59,7 +68,7 @@ stepperSuite =
             , fuzz2 int (list int) "should stop early when halted" <|
                 \n xs ->
                     Trans.reduce TCList.stepper
-                        (Trans.take n |> Trans.compose (expectReducer (List.take n xs)))
+                        (Trans.take n |-> expectReducer (List.take n xs))
                         xs
             ]
         ]
@@ -88,7 +97,7 @@ transducerSuite =
                             (+) 1
                     in
                         listReduce
-                            (Trans.map f |> Trans.compose (expectReducer (List.map f xs)))
+                            (Trans.map f |-> expectReducer (List.map f xs))
                             xs
             ]
         , describe "statefulMap transducer"
@@ -96,10 +105,8 @@ transducerSuite =
                 \xs ->
                     listReduce
                         (Trans.statefulMap 0 (\x prev -> ( x + prev, x ))
-                            |> Trans.compose
-                                (expectReducer
+                            |-> expectReducer
                                     (List.take 1 xs ++ List.map2 (+) xs (List.drop 1 xs))
-                                )
                         )
                         xs
             ]
@@ -108,26 +115,26 @@ transducerSuite =
                 \xs ->
                     listReduce
                         (Trans.withIndex
-                            |> Trans.compose (expectReducer (withIndex xs))
+                            |-> expectReducer (withIndex xs)
                         )
                         xs
             ]
         , describe "take transducer"
             [ fuzz2 int (list int) "should take (at most) the first n elements" <|
                 \n xs ->
-                    listReduce (Trans.take n |> Trans.compose (expectReducer (List.take n xs))) xs
+                    listReduce (Trans.take n |-> expectReducer (List.take n xs)) xs
             ]
         , describe "drop transducer"
             [ fuzz2 int (list int) "should skip the first n elements" <|
                 \n xs ->
-                    listReduce (Trans.drop n |> Trans.compose (expectReducer (List.drop n xs))) xs
+                    listReduce (Trans.drop n |-> expectReducer (List.drop n xs)) xs
             ]
         , describe "concat transducer"
             [ fuzz (list (list int)) "should send elements in order, deconstructing one level of `List`" <|
                 \xs ->
                     listReduce
                         (Trans.concat TCList.stepper
-                            |> Trans.compose (expectReducer (List.concat xs))
+                            |-> expectReducer (List.concat xs)
                         )
                         xs
             ]
