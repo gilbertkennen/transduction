@@ -80,7 +80,30 @@ reducerSuite =
 transducerSuite : Test
 transducerSuite =
     describe "Transducers"
-        [ describe "withIndex transducer"
+        [ describe "map transducer"
+            [ fuzz (list int) "should map the values of the collection" <|
+                \xs ->
+                    let
+                        f =
+                            (+) 1
+                    in
+                        listReduce
+                            (Trans.map f |> Trans.compose (expectReducer (List.map f xs)))
+                            xs
+            ]
+        , describe "statefulMap transducer"
+            [ fuzz (list int) "should map stateful values of the collection" <|
+                \xs ->
+                    listReduce
+                        (Trans.statefulMap 0 (\x prev -> ( x + prev, x ))
+                            |> Trans.compose
+                                (expectReducer
+                                    (List.take 1 xs ++ List.map2 (+) xs (List.drop 1 xs))
+                                )
+                        )
+                        xs
+            ]
+        , describe "withIndex transducer"
             [ fuzz (list int) "should tag each element with its index" <|
                 \xs ->
                     listReduce
