@@ -64,12 +64,13 @@ stepperSuite =
         [ describe "list stepper"
             [ fuzz (list int) "should emit elements in order" <|
                 \xs ->
-                    Trans.reduce TCList.stepper (expectReducer xs) xs
+                    xs
+                        |> Trans.reduce TCList.stepper (expectReducer xs)
             , fuzz2 int (list int) "should stop early when halted" <|
                 \n xs ->
-                    Trans.reduce TCList.stepper
-                        (Trans.take n |-> expectReducer (List.take n xs))
-                        xs
+                    xs
+                        |> Trans.reduce TCList.stepper
+                            (Trans.take n |-> expectReducer (List.take n xs))
             ]
         ]
 
@@ -80,7 +81,8 @@ reducerSuite =
         [ describe "list reducer"
             [ fuzz (list int) "returns a list of elements in order" <|
                 \xs ->
-                    listReduce TCList.reducer xs
+                    xs
+                        |> listReduce TCList.reducer
                         |> Expect.equal xs
             ]
         , describe "length reducer"
@@ -102,10 +104,11 @@ transducerSuite =
                     let
                         f =
                             (+) 1
+
+                        reducer =
+                            expectReducer (List.map f xs)
                     in
-                        listReduce
-                            (Trans.map f |-> expectReducer (List.map f xs))
-                            xs
+                        listReduce (Trans.map f |-> reducer) xs
             ]
         , describe "statefulMap transducer"
             [ fuzz (list int) "should map stateful values of the collection" <|
