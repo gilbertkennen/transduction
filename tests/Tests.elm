@@ -3,29 +3,30 @@ module Tests exposing (..)
 import Test exposing (..)
 import Expect
 import Fuzz exposing (..)
-import Transduction as Trans
+import Transduction as T
+import Transduction.Transducers as Trans
 import Transduction.Reply as Reply
 import Transduction.Collection.List as TCList
 import List.Extra
 
 
 (|->) :
-    Trans.Transducer betweenState betweenInput betweenResult thisState thisInput thisResult
-    -> Trans.Transducer afterState afterInput afterResult betweenState betweenInput betweenResult
-    -> Trans.Transducer afterState afterInput afterResult thisState thisInput thisResult
+    T.Transducer betweenState betweenInput betweenResult thisState thisInput thisResult
+    -> T.Transducer afterState afterInput afterResult betweenState betweenInput betweenResult
+    -> T.Transducer afterState afterInput afterResult thisState thisInput thisResult
 (|->) =
-    flip Trans.compose
+    flip T.compose
 infixr 8 |->
 
 
-listReduce : Trans.Reducer state input result -> List input -> result
+listReduce : T.Reducer state input result -> List input -> result
 listReduce =
-    Trans.reduce TCList.stepper
+    T.reduce TCList.stepper
 
 
-expectReducer : List input -> Trans.Reducer (Result String (List input)) input Expect.Expectation
+expectReducer : List input -> T.Reducer (Result String (List input)) input Expect.Expectation
 expectReducer xs =
-    Trans.reducer
+    T.reducer
         (Reply.continue (Ok xs))
         (\x state ->
             let
@@ -65,11 +66,11 @@ stepperSuite =
             [ fuzz (list int) "should emit elements in order" <|
                 \xs ->
                     xs
-                        |> Trans.reduce TCList.stepper (expectReducer xs)
+                        |> T.reduce TCList.stepper (expectReducer xs)
             , fuzz2 int (list int) "should stop early when halted" <|
                 \n xs ->
                     xs
-                        |> Trans.reduce TCList.stepper
+                        |> T.reduce TCList.stepper
                             (Trans.take n |-> expectReducer (List.take n xs))
             ]
         ]

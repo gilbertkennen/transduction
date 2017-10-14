@@ -1,21 +1,12 @@
 module Transduction
     exposing
         ( Reducer
-        , Transducer
+        , Transducer(Transducer)
         , Stepper
         , reduce
         , reducer
         , transducer
         , compose
-        , map
-        , statefulMap
-        , take
-        , drop
-        , withIndex
-        , withCount
-        , concat
-        , reverse
-        , length
         )
 
 {-| An Elm experiment in transducers. The purpose of transducers is to create composable elements which work on collections in powerful ways.
@@ -31,16 +22,6 @@ Transducers defined here will always try to do as much as possible to reduce the
 # Basic Transducer Functions
 
 @docs reduce, transducer, reducer, compose
-
-
-# Transducers
-
-@docs map, statefulMap, take, drop, withIndex, withCount, concat, reverse
-
-
-# Reducers
-
-@docs length
 
 -}
 
@@ -101,6 +82,8 @@ reduce stepper (Transducer reducer) collection =
   - The second transforms a reducer's step function.
   - The third transforms a reducer's finish function.
 
+This is an alternative to using the constructor which reduces some minor flexibility for the majority of cases.
+
 -}
 transducer :
     (Reply afterState -> Reply thisState)
@@ -140,140 +123,3 @@ compose :
     -> Transducer afterState afterInput afterResult thisState thisInput thisResult
 compose (Transducer transducer1) (Transducer transducer2) =
     Transducer (transducer1 >> transducer2)
-
-
-{-| Maps the collection's element values, not the result.
--}
-map : (thisInput -> afterInput) -> Transducer state afterInput result state thisInput result
-map f =
-    transducer identity ((>>) f) identity
-
-
-{-| Sometimes you need to remember a bit of state while mapping.
--}
-statefulMap :
-    thisState
-    -> (thisInput -> thisState -> ( afterInput, thisState ))
-    -> Transducer afterState afterInput result ( thisState, afterState ) thisInput result
-statefulMap init1 step1 =
-    transducer
-        (\init2 -> Reply.map ((,) init1) init2)
-        (\step2 ->
-            (\x ( state1, state2 ) ->
-                step1 x state1
-                    |> (\( newX, newState1 ) ->
-                            Reply.map ((,) newState1) (step2 newX state2)
-                       )
-            )
-        )
-        ((>>) Tuple.second)
-
-
-{-| Include an index with each element.
--}
-withIndex : Transducer afterState ( Int, thisInput ) result ( Int, afterState ) thisInput result
-withIndex =
-    statefulMap 0 (\x n -> ( ( n, x ), n + 1 ))
-
-
-{-| Stop the iteration after the specified number of elements.
--}
-take : Int -> Transducer afterState input result ( Int, afterState ) input result
-take n =
-    transducer
-        (\init ->
-            Reply.andThen
-                (\state ->
-                    if n <= 0 then
-                        Reply.halt ( n, state )
-                    else
-                        Reply.continue ( n, state )
-                )
-                init
-        )
-        (\step x ( m, state ) ->
-            Reply.andThen
-                (\newState ->
-                    if m <= 1 then
-                        Reply.halt ( m - 1, newState )
-                    else
-                        Reply.continue ( m - 1, newState )
-                )
-                (step x state)
-        )
-        ((>>) Tuple.second)
-
-
-{-| Skip the first n elements. Negatives count as 0.
--}
-drop : Int -> Transducer afterState input result ( Int, afterState ) input result
-drop n =
-    transducer
-        (Reply.map ((,) n))
-        (\step x ( m, state ) ->
-            if m <= 0 then
-                Reply.map ((,) m) (step x state)
-            else
-                Reply.continue ( m - 1, state )
-        )
-        ((>>) Tuple.second)
-
-
-{-| Attach a count of elements to the final result.
--}
-withCount : Transducer afterState input afterResult ( Int, afterState ) input ( Int, afterResult )
-withCount =
-    transducer
-        (Reply.map ((,) 0))
-        (\step x ( n, state ) -> Reply.map ((,) (n + 1)) (step x state))
-        Tuple.mapSecond
-
-
-{-| Given an appropriate `Stepper` function, deconstruct each collection passed in and pass elements down instead.
--}
-concat :
-    Stepper state collection afterInput
-    -> Transducer state afterInput result state collection result
-concat stepper =
-    transducer
-        identity
-        (\step collection state ->
-            stepper step (Reply.continue state) collection
-        )
-        identity
-
-
-{-| Re-emits elements in reverse order. Only works on finite lists.
--}
-reverse : Transducer afterState input result (List input) input result
-reverse =
-    Transducer
-        (\( init, step, finish ) ->
-            ( Reply.map (\_ -> []) init
-            , \x cache -> Reply.continue (x :: cache)
-            , \cache -> stepper step init cache |> Reply.state |> finish
-            )
-        )
-
-
-stepper : Stepper state (List a) a
-stepper f state xs =
-    if Reply.isHalted state then
-        state
-    else
-        case xs of
-            [] ->
-                state
-
-            x :: rest ->
-                stepper f (Reply.andThenContinue (f x) state) rest
-
-
-{-| Returns the number of elements passed to it.
--}
-length : Reducer Int input Int
-length =
-    reducer
-        (Reply.continue 0)
-        (\_ acc -> Reply.continue (acc + 1))
-        identity
