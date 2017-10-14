@@ -14,6 +14,7 @@ module Transduction
         , withIndex
         , withCount
         , concat
+        , length
         )
 
 {-| An Elm experiment in transducers. The purpose of transducers is to create composable elements which work on collections in powerful ways.
@@ -34,6 +35,11 @@ Transducers defined here will always try to do as much as possible to reduce the
 # Transducers
 
 @docs map, statefulMap, take, drop, withIndex, withCount, concat
+
+
+# Reducers
+
+#docs length
 
 -}
 
@@ -233,4 +239,12 @@ concat stepper =
         (\step collection state ->
             stepper step (Reply.continue state) collection
         )
+        identity
+
+
+length : Reducer Int input Int
+length =
+    reducer
+        (Reply.continue 0)
+        (\_ acc -> Reply.continue (acc + 1))
         identity

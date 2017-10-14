@@ -83,6 +83,13 @@ reducerSuite =
                     listReduce TCList.reducer xs
                         |> Expect.equal xs
             ]
+        , describe "length reducer"
+            [ fuzz (list unit) "returns a count of elements" <|
+                \xs ->
+                    xs
+                        |> listReduce Trans.length
+                        |> Expect.equal (List.length xs)
+            ]
         ]
 
 
