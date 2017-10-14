@@ -148,6 +148,11 @@ transducerSuite =
                         )
                         xs
             ]
+        , describe "reverse transducer"
+            [ fuzz (list int) "should reverse the elements passed to it" <|
+                \xs ->
+                    listReduce (Trans.reverse |-> expectReducer (List.reverse xs)) xs
+            ]
         ]
 
 

@@ -14,6 +14,7 @@ module Transduction
         , withIndex
         , withCount
         , concat
+        , reverse
         , length
         )
 
@@ -34,7 +35,7 @@ Transducers defined here will always try to do as much as possible to reduce the
 
 # Transducers
 
-@docs map, statefulMap, take, drop, withIndex, withCount, concat
+@docs map, statefulMap, take, drop, withIndex, withCount, concat, reverse
 
 
 # Reducers
@@ -240,6 +241,32 @@ concat stepper =
             stepper step (Reply.continue state) collection
         )
         identity
+
+
+{-| Re-emits elements in reverse order. Only works on finite lists.
+-}
+reverse : Transducer afterState input result (List input) input result
+reverse =
+    Transducer
+        (\( init, step, finish ) ->
+            ( Reply.map (\_ -> []) init
+            , \x cache -> Reply.continue (x :: cache)
+            , \cache -> stepper step init cache |> Reply.state |> finish
+            )
+        )
+
+
+stepper : Stepper state (List a) a
+stepper f state xs =
+    if Reply.isHalted state then
+        state
+    else
+        case xs of
+            [] ->
+                state
+
+            x :: rest ->
+                stepper f (Reply.andThenContinue (f x) state) rest
 
 
 {-| Returns the number of elements passed to it.
