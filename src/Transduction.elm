@@ -39,7 +39,7 @@ Transducers defined here will always try to do as much as possible to reduce the
 
 # Reducers
 
-#docs length
+@docs length
 
 -}
 
@@ -242,6 +242,8 @@ concat stepper =
         identity
 
 
+{-| Returns the number of elements passed to it.
+-}
 length : Reducer Int input Int
 length =
     reducer
