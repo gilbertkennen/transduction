@@ -168,6 +168,15 @@ transducerSuite =
                 \xs ->
                     listReduce (Trans.reverse |-> expectReducer (List.reverse xs)) xs
             ]
+        , describe "filter"
+            [ fuzz (list int) "should filter out False values" <|
+                \xs ->
+                    let
+                        filterF =
+                            (\x -> x % 2 == 0)
+                    in
+                        listReduce (Trans.filter filterF |-> expectReducer (List.filter filterF xs)) xs
+            ]
         ]
 
 

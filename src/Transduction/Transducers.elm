@@ -8,6 +8,7 @@ module Transduction.Transducers
         , withCount
         , concat
         , reverse
+        , filter
         , isEmpty
         , length
         , member
@@ -144,6 +145,21 @@ reverse =
             , \cache -> TCList.stepper step init cache |> Reply.state |> finish
             )
         )
+
+
+{-| Keeps only elements which match the predicate.
+-}
+filter : (input -> Bool) -> Transducer state input result state input result
+filter f =
+    transducer
+        identity
+        (\step x state ->
+            if f x then
+                step x state
+            else
+                Reply.continue state
+        )
+        identity
 
 
 {-| Halts with `False` if any elements are received, otherwise is `True`.
