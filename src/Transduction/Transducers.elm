@@ -8,6 +8,7 @@ module Transduction.Transducers
         , withCount
         , concat
         , reverse
+        , isEmpty
         , length
         )
 
@@ -142,6 +143,16 @@ reverse =
             , \cache -> TCList.stepper step init cache |> Reply.state |> finish
             )
         )
+
+
+{-| Halts with `False` if any elements are received, otherwise is `True`.
+-}
+isEmpty : Reducer Bool input Bool
+isEmpty =
+    reducer
+        (Reply.continue True)
+        (\x _ -> Reply.halt False)
+        identity
 
 
 {-| Returns the number of elements passed to it.

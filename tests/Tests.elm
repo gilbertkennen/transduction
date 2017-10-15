@@ -86,6 +86,13 @@ reducerSuite =
                         |> listReduce TCList.reducer
                         |> Expect.equal xs
             ]
+        , describe "isEmpty reducer" <|
+            [ fuzz (list unit) "returns True on empty and False on non-empty" <|
+                \xs ->
+                    xs
+                        |> listReduce Trans.isEmpty
+                        |> Expect.equal (List.isEmpty xs)
+            ]
         , describe "length reducer"
             [ fuzz (list unit) "returns a count of elements" <|
                 \xs ->
