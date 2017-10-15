@@ -20,8 +20,8 @@ infixr 8 |->
 
 
 listReduce : T.Reducer state input result -> List input -> result
-listReduce =
-    T.reduce TCList.stepper
+listReduce reducer xs =
+    T.reduce (TCList.emitter xs |-> reducer)
 
 
 expectReducer : List input -> T.Reducer (Result String (List input)) input Expect.Expectation
@@ -59,21 +59,22 @@ expectReducer xs =
         )
 
 
-stepperSuite : Test
-stepperSuite =
-    describe "Steppers"
-        [ describe "list stepper"
-            [ fuzz (list int) "should emit elements in order" <|
-                \xs ->
-                    xs
-                        |> T.reduce TCList.stepper (expectReducer xs)
-            , fuzz2 int (list int) "should stop early when halted" <|
-                \n xs ->
-                    xs
-                        |> T.reduce TCList.stepper
-                            (Trans.take n |-> expectReducer (List.take n xs))
-            ]
-        ]
+
+-- stepperSuite : Test
+-- stepperSuite =
+--     describe "Steppers"
+--         [ describe "list stepper"
+--             [ fuzz (list int) "should emit elements in order" <|
+--                 \xs ->
+--                     xs
+--                         |> T.reduce TCList.stepper (expectReducer xs)
+--             , fuzz2 int (list int) "should stop early when halted" <|
+--                 \n xs ->
+--                     xs
+--                         |> T.reduce TCList.stepper
+--                             (Trans.take n |-> expectReducer (List.take n xs))
+--             ]
+--         ]
 
 
 reducerSuite : Test
@@ -176,7 +177,7 @@ transducerSuite =
             [ fuzz (list (list int)) "should send elements in order, deconstructing one level of `List`" <|
                 \xs ->
                     listReduce
-                        (Trans.concat TCList.stepper
+                        (Trans.concat TCList.emitter
                             |-> expectReducer (List.concat xs)
                         )
                         xs

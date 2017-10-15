@@ -30,7 +30,16 @@ module Transduction.Transducers
 
 -}
 
-import Transduction exposing (Transducer(Transducer), Reducer, Stepper, transducer, reducer, extract)
+import Transduction
+    exposing
+        ( Transducer(Transducer)
+        , Reducer
+        , Emitter
+        , transducer
+        , reducer
+        , stepper
+        , extract
+        )
 import Transduction.Reply as Reply exposing (Reply)
 import Transduction.Collection.List as TCList
 
@@ -125,13 +134,13 @@ withCount =
 {-| Given an appropriate `Stepper` function, deconstruct each collection passed in and pass elements down instead.
 -}
 concat :
-    Stepper state collection afterInput
+    (collection -> Emitter state afterInput state emitterState state)
     -> Transducer state afterInput result state collection result
-concat stepper =
+concat emitterF =
     transducer
         identity
         (\step collection state ->
-            stepper step (Reply.continue state) collection
+            stepper (emitterF collection) step (Reply.continue state)
         )
         identity
 
@@ -144,7 +153,7 @@ reverse =
         (\( init, step, finish ) ->
             ( Reply.map (\_ -> []) init
             , \x cache -> Reply.continue (x :: cache)
-            , \cache -> TCList.stepper step init cache |> Reply.state |> finish
+            , \cache -> stepper (TCList.emitter cache) step init |> Reply.state |> finish
             )
         )
 
@@ -174,7 +183,7 @@ intersperse x =
             if firstRun then
                 step y state |> Reply.map ((,) False)
             else
-                TCList.stepper step (Reply.continue state) [ x, y ] |> Reply.map ((,) False)
+                stepper (TCList.emitter [ x, y ]) step (Reply.continue state) |> Reply.map ((,) False)
         )
         ((>>) Tuple.second)
 

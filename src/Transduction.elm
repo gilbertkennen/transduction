@@ -1,9 +1,10 @@
 module Transduction
     exposing
-        ( Reducer
-        , Transducer(Transducer)
-        , Stepper
+        ( Transducer(Transducer)
+        , Reducer
+        , Emitter
         , reduce
+        , stepper
         , reducer
         , transducer
         , compose
@@ -17,7 +18,7 @@ Transducers defined here will always try to do as much as possible to reduce the
 
 # Types
 
-@docs Transducer, Reducer, Stepper
+@docs Transducer, Reducer, Emitter
 
 
 # Basic Transducer Functions
@@ -27,7 +28,7 @@ Transducers defined here will always try to do as much as possible to reduce the
 
 # Advanced Transducer Functions
 
-@docs extract
+@docs stepper, extract
 
 -}
 
@@ -52,27 +53,59 @@ type alias TransducerTriple state input result =
     )
 
 
+{-| An `Emitter` is a special `Transducer` which only takes `()` as its input. The idea is that this would normally be the first `Transducer` in a stack and this is how one injects a collection to be reduced.
+-}
+type alias Emitter afterState afterInput afterResult thisState thisResult =
+    Transducer afterState afterInput afterResult thisState () thisResult
+
+
 {-| A `Reducer` is just a `Transducer` which effectively doesn't interact with anything after it. Defining it this way makes composition easier, just use `compose`.
 -}
 type alias Reducer state input result =
     Transducer () () () state input result
 
 
-{-| A stepper is a function which applies the step function successively to each element of the collection. This could be trivially implemented using `foldl`, but this gives the flexibility of implementing early termination based on the `Reply`.
+{-| When a `Transducer` has both an `Emitter` and a `Reducer`, it is complete and can be reduced.
 -}
-type alias Stepper state collection element =
-    (element -> state -> Reply state) -> Reply state -> collection -> Reply state
+type alias Reduction state result =
+    Transducer () () () state () result
 
 
 {-| Where the magic happens. Takes a `Stepper` and a `Reducer` to make a function which reduces the collection.
 -}
-reduce : Stepper state collection input -> Reducer state input result -> collection -> result
-reduce stepper reducer collection =
+reduce : Reduction state result -> result
+reduce reduction =
     let
         ( init, step, finish ) =
-            extract reducer
+            extract reduction
     in
-        stepper step init collection |> Reply.state |> finish
+        doSteps step init |> Reply.state |> finish
+
+
+{-| Execute just the stepping step of reduction.
+-}
+stepper : Emitter state input state emitterState state -> (input -> state -> Reply state) -> Reply state -> Reply state
+stepper emitter stepF state =
+    let
+        fitting : Reducer state input state
+        fitting =
+            reducer
+                state
+                stepF
+                identity
+
+        ( init, step, finish ) =
+            extract (compose fitting emitter)
+    in
+        doSteps step init |> Reply.map finish |> Reply.refill
+
+
+doSteps : (() -> state -> Reply state) -> Reply state -> Reply state
+doSteps step state =
+    if Reply.isGo state then
+        doSteps step (Reply.andThenContinue (step ()) state)
+    else
+        state
 
 
 {-| Make your own `Transducer`. Takes three functions.

@@ -3,19 +3,21 @@ module Transduction.Reply
         ( Reply
         , halt
         , continue
+        , empty
         , map
         , map2
         , mapContinue
         , andThen
         , andThenContinue
-        , isHalted
+        , isGo
+        , isStop
         , toHalt
+        , toEmpty
+        , refill
         , state
         )
 
 {-| Building your own advanced transducers or steppers usually requires manually handling init and step replies.
-
-`Halt` is a stronger state than `Continue` so I haven't provided any easy way to switch from `Halt` to `Continue`.
 
 
 # Type
@@ -25,7 +27,7 @@ module Transduction.Reply
 
 # Basics
 
-@docs continue, halt
+@docs continue, empty, halt
 
 
 # Transformations
@@ -35,16 +37,16 @@ module Transduction.Reply
 
 # Miscellaneous
 
-@docs isHalted, toHalt, state
+@docs isStop, isGo, toHalt, toEmpty, refill, state
 
 -}
 
 
-{-| Halt means that the transducer should not be run again with the state. Continue means that you *may* step again with the state, but might not (the collection might be empty).
--}
+{-| -}
 type Reply state
     = Continue state
     | Halt state
+    | Empty state
 
 
 {-| Indicate that continuing to the next element is acceptable.
@@ -61,6 +63,13 @@ halt =
     Halt
 
 
+{-| Indicate that the emitter is unable to continue for being empty.
+-}
+empty : a -> Reply a
+empty =
+    Empty
+
+
 {-| Transform a contained state regardless of if it is `continue` or `halt`.
 -}
 map : (a -> b) -> Reply a -> Reply b
@@ -71,6 +80,9 @@ map f x =
 
         Continue state ->
             Continue (f state)
+
+        Empty state ->
+            Empty (f state)
 
 
 {-| -}
@@ -99,6 +111,9 @@ andThen f x =
         Halt state ->
             toHalt (f state)
 
+        Empty state ->
+            toEmpty (f state)
+
         Continue state ->
             f state
 
@@ -115,25 +130,62 @@ andThenContinue f reply =
             reply
 
 
-{-| Check if it is currently `halt`.
+{-| Check if it is currently halt or empty.
 -}
-isHalted : Reply a -> Bool
-isHalted reply =
+isStop : Reply a -> Bool
+isStop reply =
+    not (isGo reply)
+
+
+{-| Check if it is currently continue.
+-}
+isGo : Reply a -> Bool
+isGo reply =
     case reply of
         Continue _ ->
-            False
-
-        Halt _ ->
             True
 
+        _ ->
+            False
 
-{-| Sets reply to Halt.
+
+{-| Sets reply to halt.
 -}
 toHalt : Reply a -> Reply a
 toHalt reply =
     case reply of
         Continue state ->
             Halt state
+
+        Empty state ->
+            Halt state
+
+        Halt _ ->
+            reply
+
+
+{-| Sets reply to empty unless it is already halt.
+-}
+toEmpty : Reply a -> Reply a
+toEmpty reply =
+    case reply of
+        Continue state ->
+            Empty state
+
+        Empty _ ->
+            reply
+
+        Halt _ ->
+            reply
+
+
+{-| Switches reply from empty to continue.
+-}
+refill : Reply a -> Reply a
+refill reply =
+    case reply of
+        Empty state ->
+            Continue state
 
         _ ->
             reply
@@ -145,6 +197,9 @@ state : Reply state -> state
 state reply =
     case reply of
         Continue state ->
+            state
+
+        Empty state ->
             state
 
         Halt state ->
