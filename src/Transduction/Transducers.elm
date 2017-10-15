@@ -20,12 +20,12 @@ module Transduction.Transducers
 
 # Transducers
 
-@docs map, statefulMap, take, drop, withIndex, withCount, concat, reverse
+@docs map, statefulMap, take, drop, withIndex, withCount, concat, reverse, filter, intersperse
 
 
 # Reducers
 
-@docs length
+@docs isEmpty, length, member
 
 -}
 
