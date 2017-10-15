@@ -100,6 +100,13 @@ reducerSuite =
                         |> listReduce Trans.length
                         |> Expect.equal (List.length xs)
             ]
+        , describe "member reducer" <|
+            [ fuzz2 int (list int) "should return true if it is a member and false if not" <|
+                \x xs ->
+                    xs
+                        |> listReduce (Trans.member x)
+                        |> Expect.equal (List.member x xs)
+            ]
         ]
 
 

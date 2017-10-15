@@ -10,6 +10,7 @@ module Transduction.Transducers
         , reverse
         , isEmpty
         , length
+        , member
         )
 
 {-|
@@ -162,4 +163,19 @@ length =
     reducer
         (Reply.continue 0)
         (\_ acc -> Reply.continue (acc + 1))
+        identity
+
+
+{-| Halts with `True` if the element is passed in. Otherwise is `False`.
+-}
+member : input -> Reducer Bool input Bool
+member x =
+    reducer
+        (Reply.continue False)
+        (\y _ ->
+            if x == y then
+                Reply.halt True
+            else
+                Reply.continue False
+        )
         identity
