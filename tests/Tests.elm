@@ -190,10 +190,10 @@ transducerSuite =
             [ fuzz (list int) "should filter out False values" <|
                 \xs ->
                     let
-                        filterF =
+                        predicate =
                             (\x -> x % 2 == 0)
                     in
-                        listReduce (Trans.filter filterF |-> expectReducer (List.filter filterF xs)) xs
+                        listReduce (Trans.filter predicate |-> expectReducer (List.filter predicate xs)) xs
             ]
         , describe "intersperse"
             [ fuzz (list int) "should put an extra element between each other element." <|
