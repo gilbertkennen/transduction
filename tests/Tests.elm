@@ -177,6 +177,11 @@ transducerSuite =
                     in
                         listReduce (Trans.filter filterF |-> expectReducer (List.filter filterF xs)) xs
             ]
+        , describe "intersperse"
+            [ fuzz (list int) "should put an extra element between each other element." <|
+                \xs ->
+                    listReduce (Trans.intersperse 0 |-> expectReducer (List.intersperse 0 xs)) xs
+            ]
         ]
 
 

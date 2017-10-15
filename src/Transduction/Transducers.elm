@@ -9,6 +9,7 @@ module Transduction.Transducers
         , concat
         , reverse
         , filter
+        , intersperse
         , isEmpty
         , length
         , member
@@ -160,6 +161,21 @@ filter f =
                 Reply.continue state
         )
         identity
+
+
+{-| Emits the provided element between elements.
+-}
+intersperse : input -> Transducer state input result ( Bool, state ) input result
+intersperse x =
+    transducer
+        (Reply.map ((,) True))
+        (\step y ( firstRun, state ) ->
+            if firstRun then
+                step y state |> Reply.map ((,) False)
+            else
+                TCList.stepper step (Reply.continue state) [ x, y ] |> Reply.map ((,) False)
+        )
+        ((>>) Tuple.second)
 
 
 {-| Halts with `False` if any elements are received, otherwise is `True`.
