@@ -13,6 +13,7 @@ module Transduction.Transducers
         , isEmpty
         , length
         , member
+        , partition
         )
 
 {-|
@@ -25,11 +26,11 @@ module Transduction.Transducers
 
 # Reducers
 
-@docs isEmpty, length, member
+@docs isEmpty, length, member, partition
 
 -}
 
-import Transduction exposing (Transducer(Transducer), Reducer, Stepper, transducer, reducer)
+import Transduction exposing (Transducer(Transducer), Reducer, Stepper, transducer, reducer, extract)
 import Transduction.Reply as Reply exposing (Reply)
 import Transduction.Collection.List as TCList
 
@@ -176,6 +177,32 @@ intersperse x =
                 TCList.stepper step (Reply.continue state) [ x, y ] |> Reply.map ((,) False)
         )
         ((>>) Tuple.second)
+
+
+{-| Reduce into one of two reducers depending on a predicate.
+-}
+partition :
+    (input -> Bool)
+    -> Reducer trueState input trueResult
+    -> Reducer falseState input falseResult
+    -> Reducer ( trueState, falseState ) input ( trueResult, falseResult )
+partition predicate trueReducer falseReducer =
+    let
+        ( trueInit, trueStep, trueFinish ) =
+            extract trueReducer
+
+        ( falseInit, falseStep, falseFinish ) =
+            extract falseReducer
+    in
+        reducer
+            (Reply.map2 (,) trueInit falseInit)
+            (\x ( trueState, falseState ) ->
+                if predicate x then
+                    trueStep x trueState |> Reply.map (\tS -> ( tS, falseState ))
+                else
+                    falseStep x falseState |> Reply.map ((,) trueState)
+            )
+            (\( trueState, falseState ) -> ( trueFinish trueState, falseFinish falseState ))
 
 
 {-| Halts with `False` if any elements are received, otherwise is `True`.

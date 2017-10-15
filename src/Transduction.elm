@@ -7,6 +7,7 @@ module Transduction
         , reducer
         , transducer
         , compose
+        , extract
         )
 
 {-| An Elm experiment in transducers. The purpose of transducers is to create composable elements which work on collections in powerful ways.
@@ -22,6 +23,11 @@ Transducers defined here will always try to do as much as possible to reduce the
 # Basic Transducer Functions
 
 @docs reduce, transducer, reducer, compose
+
+
+# Advanced Transducer Functions
+
+@docs extract
 
 -}
 
@@ -61,17 +67,10 @@ type alias Stepper state collection element =
 {-| Where the magic happens. Takes a `Stepper` and a `Reducer` to make a function which reduces the collection.
 -}
 reduce : Stepper state collection input -> Reducer state input result -> collection -> result
-reduce stepper (Transducer reducer) collection =
+reduce stepper reducer collection =
     let
-        unit : TransducerTriple () () ()
-        unit =
-            ( (Reply.continue ())
-            , (\() () -> Reply.continue ())
-            , (\() -> ())
-            )
-
         ( init, step, finish ) =
-            reducer unit
+            extract reducer
     in
         stepper step init collection |> Reply.state |> finish
 
@@ -123,3 +122,18 @@ compose :
     -> Transducer afterState afterInput afterResult thisState thisInput thisResult
 compose (Transducer transducer1) (Transducer transducer2) =
     Transducer (transducer1 >> transducer2)
+
+
+{-| Get the raw functions of a transducer. Occasionally helpful to construct particularly tricky transducers.
+-}
+extract : Reducer state input result -> TransducerTriple state input result
+extract (Transducer reducer) =
+    let
+        unit : TransducerTriple () () ()
+        unit =
+            ( (Reply.continue ())
+            , (\() () -> Reply.continue ())
+            , (\() -> ())
+            )
+    in
+        reducer unit

@@ -107,6 +107,24 @@ reducerSuite =
                         |> listReduce (Trans.member x)
                         |> Expect.equal (List.member x xs)
             ]
+        , describe "partition reducer" <|
+            [ fuzz (list int) "should sort and reduce items based on the predicate" <|
+                \xs ->
+                    let
+                        predicate =
+                            (\x -> x % 2 == 0)
+                    in
+                        xs
+                            |> listReduce
+                                (Trans.partition predicate
+                                    (Trans.reverse |-> TCList.reducer)
+                                    Trans.length
+                                )
+                            |> Expect.equal
+                                (List.partition predicate xs
+                                    |> (\( trues, falses ) -> ( List.reverse trues, List.length falses ))
+                                )
+            ]
         ]
 
 

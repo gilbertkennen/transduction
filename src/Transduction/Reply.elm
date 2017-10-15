@@ -4,6 +4,7 @@ module Transduction.Reply
         , halt
         , continue
         , map
+        , map2
         , mapContinue
         , andThen
         , andThenContinue
@@ -29,7 +30,7 @@ module Transduction.Reply
 
 # Transformations
 
-@docs map, mapContinue, andThen, andThenContinue
+@docs map, map2, mapContinue, andThen, andThenContinue
 
 
 # Miscellaneous
@@ -70,6 +71,12 @@ map f x =
 
         Continue state ->
             Continue (f state)
+
+
+{-| -}
+map2 : (a -> b -> c) -> Reply a -> Reply b -> Reply c
+map2 f x y =
+    andThen (\x_ -> map (f x_) y) x
 
 
 {-| Transform a contained state only if it is `continue`.
