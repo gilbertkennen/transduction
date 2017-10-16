@@ -59,22 +59,19 @@ expectReducer xs =
         )
 
 
-
--- stepperSuite : Test
--- stepperSuite =
---     describe "Steppers"
---         [ describe "list stepper"
---             [ fuzz (list int) "should emit elements in order" <|
---                 \xs ->
---                     xs
---                         |> T.reduce TCList.stepper (expectReducer xs)
---             , fuzz2 int (list int) "should stop early when halted" <|
---                 \n xs ->
---                     xs
---                         |> T.reduce TCList.stepper
---                             (Trans.take n |-> expectReducer (List.take n xs))
---             ]
---         ]
+emitterSuite : Test
+emitterSuite =
+    describe "Steppers"
+        [ describe "list stepper"
+            [ fuzz (list int) "should emit elements in order" <|
+                \xs ->
+                    T.reduce (TCList.emitter xs |-> expectReducer xs)
+            , fuzz2 int (list int) "should stop early when halted" <|
+                \n xs ->
+                    T.reduce
+                        (TCList.emitter xs |-> Trans.take n |-> expectReducer (List.take n xs))
+            ]
+        ]
 
 
 reducerSuite : Test
