@@ -7,6 +7,8 @@ module Transduction
         , cap
         , finish
         , mapReply
+        , apply
+        , emit
         , fold
         , mapInput
         , concat
@@ -21,6 +23,7 @@ module Transduction
         , emitter
         , member
         , partition
+        , repeat
         )
 
 {-| Transducers are composable structures which process elements one at a time.
@@ -38,12 +41,12 @@ module Transduction
 
 # Construction
 
-@docs mapReply
+@docs mapReply, apply, emit
 
 
 # Transducers
 
-@docs mapInput, fold, concat, take, repeatedly, reverse, filter, drop, intersperse, isEmpty, length, emitter, member, partition
+@docs mapInput, fold, concat, take, repeatedly, reverse, filter, drop, intersperse, isEmpty, length, emitter, member, partition, repeat
 
 -}
 
@@ -120,6 +123,8 @@ mapReply transducer finish reply =
             Continue (transducer reducer)
 
 
+{-| Emit a value mapping the reply.
+-}
 emit :
     Transducer afterInput afterOutput thisInput thisOutput
     -> (afterOutput -> thisOutput)
@@ -128,6 +133,18 @@ emit :
     -> Reply thisInput thisOutput
 emit transducer outputMap reducer maybeX =
     reducer maybeX |> mapReply transducer outputMap
+
+
+{-| Applies a `Continue` reducer to the input if possible.
+-}
+apply : Maybe input -> Reply input output -> Reply input output
+apply maybeX reply =
+    case reply of
+        Halt _ ->
+            reply
+
+        Continue reducer ->
+            reducer maybeX
 
 
 {-| Given a function to apply the elements of a collection to a `Reducer`, applies the elements of each collection ingested to the `Reducer`.
@@ -365,11 +382,27 @@ partitionHelper predicate trueReply falseReply reducer maybeX =
                 Continue (partitionHelper predicate trueReply (apply (Just x) falseReply) reducer)
 
 
-apply : Maybe input -> Reply input output -> Reply input output
-apply maybeX reply =
-    case reply of
-        Halt _ ->
-            reply
+{-| Upon ingesting the tuple, emits the second command n times.
+-}
+repeat : Transducer input output ( Int, Maybe input ) output
+repeat reducer maybeX =
+    case maybeX of
+        Nothing ->
+            emit repeat identity reducer Nothing
 
-        Continue reducer ->
-            reducer maybeX
+        Just ( n, x ) ->
+            doRepeat n x (Continue reducer)
+                |> mapReply repeat identity
+
+
+doRepeat : Int -> Maybe input -> Reply input output -> Reply input output
+doRepeat n maybeX reply =
+    if n <= 0 then
+        reply
+    else
+        case reply of
+            Halt _ ->
+                reply
+
+            Continue reducer ->
+                doRepeat (n - 1) maybeX (reducer maybeX)

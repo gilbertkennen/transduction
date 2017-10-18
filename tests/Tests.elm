@@ -180,7 +180,7 @@ transducerSuite =
                     TList.reduce (T.member x) xs
                         |> Expect.equal (List.member x xs)
             ]
-        , describe "partition reducer" <|
+        , describe "partition" <|
             [ fuzz (list int) "should sort and reduce items based on the predicate" <|
                 \xs ->
                     let
@@ -197,5 +197,17 @@ transducerSuite =
                                 (List.partition predicate xs
                                     |> (\( trues, falses ) -> ( List.reverse trues, List.length falses ))
                                 )
+            ]
+        , describe "repeat"
+            [ fuzz (list (tuple ( intRange 0 128, int ))) "should emit the value n times" <|
+                \xs ->
+                    let
+                        repeats =
+                            List.concatMap (uncurry List.repeat) xs
+
+                        maybeXs =
+                            List.map (\( n, x ) -> ( n, Just x )) xs
+                    in
+                        TList.reduce (T.repeat |-> expect repeats) maybeXs
             ]
         ]
