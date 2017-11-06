@@ -162,10 +162,10 @@ mapReply trans finish reply =
 emit :
     Transducer afterInput afterOutput thisInput thisOutput
     -> (afterOutput -> thisOutput)
-    -> Reducer afterInput afterOutput
     -> afterInput
+    -> Reducer afterInput afterOutput
     -> Reply thisInput thisOutput
-emit trans outputMap reducer x =
+emit trans outputMap x reducer =
     case reduce reducer x of
         Halt x ->
             Halt (outputMap x)
@@ -220,7 +220,7 @@ mapInput : (thisInput -> afterInput) -> Transducer afterInput output thisInput o
 mapInput f =
     simpleTransducer
         (\x reducer ->
-            emit (mapInput f) identity reducer (f x)
+            emit (mapInput f) identity (f x) reducer
         )
 
 
@@ -267,7 +267,7 @@ take n =
             else if n == 1 then
                 reduce reducer x |> finishReply |> Halt
             else
-                emit (take (n - 1)) identity reducer x
+                emit (take (n - 1)) identity x reducer
         )
 
 
@@ -296,7 +296,7 @@ filter predicate =
     simpleTransducer
         (\x reducer ->
             if predicate x then
-                emit (filter predicate) identity reducer x
+                emit (filter predicate) identity x reducer
             else
                 Continue (filter predicate reducer)
         )
@@ -309,7 +309,7 @@ drop n =
     simpleTransducer
         (\x reducer ->
             if n <= 0 then
-                emit identity identity reducer x
+                emit identity identity x reducer
             else
                 Continue (drop (n - 1) reducer)
         )
@@ -324,8 +324,8 @@ intersperse padding =
             emit
                 (mapInput (\x -> [ padding, x ]) |> compose (concat listStepper))
                 identity
-                reducer
                 x
+                reducer
         )
 
 
@@ -451,7 +451,7 @@ mapOutput : (afterOutput -> thisOutput) -> Transducer input afterOutput input th
 mapOutput f =
     transducer
         (\x reducer ->
-            emit (mapOutput f) f reducer x
+            emit (mapOutput f) f x reducer
         )
         (f << finish)
 
