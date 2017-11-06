@@ -6,7 +6,7 @@
     "source-directories": [
         "./src"
     ],
-  "exposed-modules": ["Transduction", "Transduction.Reply", "Transduction.Collections.List"],
+  "exposed-modules": ["Transduction", "Transduction.List", "Transduction.Maybe"],
     "dependencies": {
         "elm-lang/core": "5.1.1 <= v < 6.0.0"
     },

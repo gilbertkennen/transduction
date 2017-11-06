@@ -16,6 +16,8 @@ module Transduction
         , emit
         , fold
         , mapInput
+        , mapOutput
+        , withDefault
         , concat
         , take
         , repeatedly
@@ -52,7 +54,7 @@ Functions from this section should not be required by end-users.
 
 # Transducers
 
-@docs mapInput, fold, concat, take, repeatedly, reverse, filter, drop, intersperse, isEmpty, length, member, partition, repeat
+@docs mapInput, mapOutput, fold, concat, take, repeatedly, reverse, filter, drop, intersperse, isEmpty, length, member, partition, repeat, withDefault
 
 -}
 
@@ -103,9 +105,14 @@ compose =
 -}
 cap : Reducer input (Maybe input)
 cap =
+    capHelper Nothing
+
+
+capHelper : Maybe input -> Reducer input (Maybe input)
+capHelper input =
     Reducer
-        (Halt << Just)
-        (\() -> Nothing)
+        (\x -> Continue (capHelper (Just x)))
+        (\() -> input)
 
 
 {-| Apply the reducer to an input value.
@@ -436,3 +443,21 @@ doRepeat n x reply =
 
             Continue reducer ->
                 doRepeat (n - 1) x (reduce reducer x)
+
+
+{-| Map the transducer output value.
+-}
+mapOutput : (afterOutput -> thisOutput) -> Transducer input afterOutput input thisOutput
+mapOutput f =
+    transducer
+        (\x reducer ->
+            emit (mapOutput f) f reducer x
+        )
+        (f << finish)
+
+
+{-| Provide the default value if output is `Nothing`.
+-}
+withDefault : output -> Transducer input (Maybe output) input output
+withDefault value =
+    mapOutput (Maybe.withDefault value)

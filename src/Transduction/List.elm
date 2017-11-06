@@ -1,6 +1,9 @@
 module Transduction.List exposing (stepper, concat, reduce)
 
 {-| A stepper function for use with `Transducer`s like `concat`.
+
+@docs stepper, concat, reduce
+
 -}
 
 import Transduction as Trans
@@ -14,6 +17,8 @@ import Transduction as Trans
         )
 
 
+{-| Reduce elements of a `List` in order.
+-}
 stepper : Reducer input output -> List input -> Reply input output
 stepper reducer xs =
     case xs of

@@ -5,6 +5,7 @@ import Expect
 import Fuzz exposing (..)
 import Transduction as T
 import Transduction.List as TList
+import Transduction.Maybe as TMaybe
 
 
 (|->) :
@@ -185,9 +186,9 @@ transducerSuite =
                     in
                         TList.reduce
                             (T.partition predicate
-                                T.reverse
-                                T.length
-                                |-> expect [ ( Just <| List.reverse (List.filter predicate xs), Just <| List.length (List.filter (not << predicate) xs) ) ]
+                                (T.reverse |-> T.withDefault [])
+                                (T.length |-> T.withDefault 0)
+                                |-> expect [ ( List.reverse (List.filter predicate xs), List.length (List.filter (not << predicate) xs) ) ]
                             )
                             xs
             ]
@@ -199,5 +200,21 @@ transducerSuite =
                             List.concatMap (uncurry List.repeat) xs
                     in
                         TList.reduce (T.repeat |-> expect repeats) xs
+            ]
+        , describe "mapOutput"
+            [ fuzz (maybe int) "should apply the map function to the output regardless of where it comes from" <|
+                \maybeX ->
+                    T.transduce
+                        (TMaybe.maybe |-> T.mapOutput (Maybe.map ((+) 1)))
+                        maybeX
+                        |> Expect.equal (Maybe.map ((+) 1) maybeX)
+            ]
+        , describe "withDefault"
+            [ fuzz (maybe int) "should fix `Nothing` output values" <|
+                \maybeX ->
+                    T.transduce
+                        (TMaybe.maybe |-> T.withDefault 0)
+                        maybeX
+                        |> Expect.equal (Maybe.withDefault 0 maybeX)
             ]
         ]
