@@ -102,7 +102,7 @@ compose =
     (>>)
 
 
-{-| The only basic reducer. Not sure if this should halt on receiving its first value or continue. Currently halts.
+{-| A basic reducer which always continues with the last value ingested.
 -}
 cap : Reducer input (Maybe input)
 cap =
