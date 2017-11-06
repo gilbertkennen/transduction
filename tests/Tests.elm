@@ -16,7 +16,7 @@ import Transduction.List as TList
 infixr 8 |->
 
 
-expect : List input -> T.Transducer Expect.Expectation output input Expect.Expectation
+expect : List input -> T.Transducer Never (Maybe Never) input Expect.Expectation
 expect xs =
     T.transducer
         (\x reducer ->
