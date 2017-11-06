@@ -12,6 +12,7 @@ module Transduction
         , cap
         , finish
         , finishReply
+        , finishWith
         , apply
         , emit
         , fold
@@ -49,7 +50,7 @@ module Transduction
 
 Functions from this section should not be required by end-users.
 
-@docs transducer, simpleTransducer, reduce, apply, emit, cap, finish, finishReply
+@docs transducer, simpleTransducer, reduce, apply, emit, cap, finish, finishReply, finishWith
 
 
 # Transducers
@@ -85,7 +86,7 @@ type alias Transducer afterInput afterOutput thisInput thisOutput =
 -}
 transduce : Transducer afterInput (Maybe afterInput) thisInput thisOutput -> thisInput -> thisOutput
 transduce trans x =
-    reduce (trans cap) x |> finishReply
+    finishWith x (trans cap)
 
 
 {-| Composes two transducers together. The parameter order is to make chaining using `|>` easier.
@@ -117,9 +118,9 @@ capHelper input =
 
 {-| Apply the reducer to an input value.
 -}
-reduce : Reducer input output -> input -> Reply input output
-reduce (Reducer reduceF _) =
-    reduceF
+reduce : input -> Reducer input output -> Reply input output
+reduce x (Reducer reduceF _) =
+    reduceF x
 
 
 {-| Calculate the finished value of a `Reducer`.
@@ -139,6 +140,13 @@ finishReply reply =
 
         Continue reducer ->
             finish reducer
+
+
+{-| It's very common to want to reduce one more value before finishing.
+-}
+finishWith : input -> Reducer input output -> output
+finishWith x reducer =
+    reduce x reducer |> finishReply
 
 
 {-| Map the values in a `Reply`, in case the `Transducer` wants to be `Reply` agnostic.
@@ -166,7 +174,7 @@ emit :
     -> Reducer afterInput afterOutput
     -> Reply thisInput thisOutput
 emit trans outputMap x reducer =
-    case reduce reducer x of
+    case reduce x reducer of
         Halt x ->
             Halt (outputMap x)
 
@@ -180,7 +188,7 @@ apply : input -> Reply input output -> Reply input output
 apply x reply =
     case reply of
         Continue reducer ->
-            reduce reducer x
+            reduce x reducer
 
         Halt _ ->
             reply
@@ -235,7 +243,7 @@ fold step state =
         (\x reducer ->
             Continue (fold step (step x state) reducer)
         )
-        (\reducer -> reduce reducer state |> finishReply)
+        (\reducer -> finishWith state reducer)
 
 
 {-| Upon ingesting an input, just keeps emitting that input until a `Halt` reply is received.
@@ -247,12 +255,12 @@ repeatedly : Transducer afterInput output afterInput output
 repeatedly =
     simpleTransducer
         (\input reducer ->
-            case reduce reducer input of
+            case reduce input reducer of
                 Halt x ->
                     Halt x
 
                 Continue newReduction ->
-                    reduce (repeatedly newReduction) input
+                    reduce input (repeatedly newReduction)
         )
 
 
@@ -265,7 +273,7 @@ take n =
             if n <= 0 then
                 Halt (finish reducer)
             else if n == 1 then
-                reduce reducer x |> finishReply |> Halt
+                finishWith x reducer |> Halt
             else
                 emit (take (n - 1)) identity x reducer
         )
@@ -285,7 +293,7 @@ reverseHelper state =
             Continue (reverseHelper (x :: state) reducer)
         )
         (\reducer ->
-            reduce reducer state |> finishReply
+            finishWith state reducer
         )
 
 
@@ -336,7 +344,7 @@ listStepper reducer xs =
             Continue reducer
 
         x :: rest ->
-            case reduce reducer x of
+            case reduce x reducer of
                 Halt output ->
                     Halt output
 
@@ -350,10 +358,10 @@ isEmpty : Transducer Bool output input output
 isEmpty =
     transducer
         (\x reducer ->
-            Halt (reduce reducer False |> finishReply)
+            finishWith False reducer |> Halt
         )
         (\reducer ->
-            reduce reducer True |> finishReply
+            finishWith True reducer
         )
 
 
@@ -370,10 +378,10 @@ lengthHelper : Int -> Transducer Int output input output
 lengthHelper count =
     transducer
         (\x reducer ->
-            Continue (lengthHelper (count + 1) reducer)
+            lengthHelper (count + 1) reducer |> Continue
         )
         (\reducer ->
-            reduce reducer count |> finishReply
+            finishWith count reducer
         )
 
 
@@ -384,11 +392,11 @@ member comp =
     transducer
         (\x reducer ->
             if x == comp then
-                reduce reducer True |> finishReply |> Halt
+                finishWith True reducer |> Halt
             else
-                Continue (member comp reducer)
+                member comp reducer |> Continue
         )
-        (\reducer -> reduce reducer False |> finishReply)
+        (\reducer -> finishWith False reducer)
 
 
 {-| "Applies one of two different reducers depending on the predicate. Emits a tuple of the reducers output on finish.."
@@ -416,8 +424,7 @@ partitionHelper predicate trueReply falseReply =
                 Continue (partitionHelper predicate trueReply (apply x falseReply) reducer)
         )
         (\reducer ->
-            reduce reducer ( finishReply trueReply, finishReply falseReply )
-                |> finishReply
+            finishWith ( finishReply trueReply, finishReply falseReply ) reducer
         )
 
 
@@ -442,7 +449,7 @@ doRepeat n x reply =
                 reply
 
             Continue reducer ->
-                doRepeat (n - 1) x (reduce reducer x)
+                doRepeat (n - 1) x (reduce x reducer)
 
 
 {-| Map the transducer output value.
