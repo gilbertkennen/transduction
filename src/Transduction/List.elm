@@ -1,8 +1,8 @@
-module Transduction.List exposing (stepper, concat, reduce)
+module Transduction.List exposing (stepper, concat, transduce)
 
 {-| A stepper function for use with `Transducer`s like `concat`.
 
-@docs stepper, concat, reduce
+@docs stepper, concat, transduce
 
 -}
 
@@ -41,8 +41,8 @@ concat =
     Trans.concat stepper
 
 
-{-| Reduce given a transducer.
+{-| Run the transducer against a `List` of inputs.
 -}
-reduce : Transducer afterInput (Maybe afterInput) thisInput thisOutput -> List thisInput -> thisOutput
-reduce transducer xs =
+transduce : Transducer afterInput (Maybe afterInput) thisInput thisOutput -> List thisInput -> thisOutput
+transduce transducer xs =
     Trans.transduce (concat |> compose transducer) xs

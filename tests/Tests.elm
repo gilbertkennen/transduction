@@ -58,7 +58,7 @@ transducerSuite =
                         f =
                             (+) 1
                     in
-                        TList.reduce
+                        TList.transduce
                             (T.mapInput f
                                 |-> expect (List.map f xs)
                             )
@@ -67,7 +67,7 @@ transducerSuite =
         , describe "take"
             [ fuzz2 int (list int) "should take (at most) the first n elements" <|
                 \n xs ->
-                    TList.reduce
+                    TList.transduce
                         (T.take n
                             |-> expect (List.take n xs)
                         )
@@ -76,7 +76,7 @@ transducerSuite =
         , describe "drop"
             [ fuzz2 int (list int) "should skip the first n elements" <|
                 \n xs ->
-                    TList.reduce
+                    TList.transduce
                         (T.drop n
                             |-> expect (List.drop n xs)
                         )
@@ -85,7 +85,7 @@ transducerSuite =
         , describe "concat"
             [ fuzz (list (list int)) "should send elements in order, deconstructing one level of `List`" <|
                 \xs ->
-                    TList.reduce
+                    TList.transduce
                         (T.concat TList.stepper
                             |-> expect (List.concat xs)
                         )
@@ -94,7 +94,7 @@ transducerSuite =
         , describe "reverse"
             [ fuzz (list int) "should reverse the elements passed to it" <|
                 \xs ->
-                    TList.reduce
+                    TList.transduce
                         (T.reverse
                             |-> T.concat TList.stepper
                             |-> expect (List.reverse xs)
@@ -108,7 +108,7 @@ transducerSuite =
                         predicate =
                             (\x -> x % 2 == 0)
                     in
-                        TList.reduce
+                        TList.transduce
                             (T.filter predicate
                                 |-> expect (List.filter predicate xs)
                             )
@@ -117,7 +117,7 @@ transducerSuite =
         , describe "intersperse"
             [ fuzz (list int) "should put an extra element between each other element." <|
                 \xs ->
-                    TList.reduce
+                    TList.transduce
                         (T.intersperse 0
                             |-> expect (List.intersperse 0 xs)
                         )
@@ -144,7 +144,7 @@ transducerSuite =
                         sum =
                             List.sum xs
                     in
-                        TList.reduce
+                        TList.transduce
                             (T.fold (+) 0
                                 |-> expect ([ sum ])
                             )
@@ -153,7 +153,7 @@ transducerSuite =
         , describe "isEmpty"
             [ fuzz (list unit) "emits True on empty and False on non-empty" <|
                 \xs ->
-                    TList.reduce
+                    TList.transduce
                         (T.isEmpty
                             |-> expect [ List.isEmpty xs ]
                         )
@@ -162,7 +162,7 @@ transducerSuite =
         , describe "length"
             [ fuzz (list unit) "emits a count of elements on finish" <|
                 \xs ->
-                    TList.reduce
+                    TList.transduce
                         (T.length
                             |-> expect [ List.length xs ]
                         )
@@ -171,7 +171,7 @@ transducerSuite =
         , describe "member" <|
             [ fuzz2 int (list int) "emits `True` and `Halt`s if it receives the value and emits `False` on finish" <|
                 \x xs ->
-                    TList.reduce
+                    TList.transduce
                         (T.member x
                             |-> expect [ List.member x xs ]
                         )
@@ -184,7 +184,7 @@ transducerSuite =
                         predicate =
                             (\x -> x % 2 == 0)
                     in
-                        TList.reduce
+                        TList.transduce
                             (T.partition predicate
                                 (T.reverse |-> T.withDefault [])
                                 (T.length |-> T.withDefault 0)
@@ -199,7 +199,7 @@ transducerSuite =
                         repeats =
                             List.concatMap (uncurry List.repeat) xs
                     in
-                        TList.reduce (T.repeat |-> expect repeats) xs
+                        TList.transduce (T.repeat |-> expect repeats) xs
             ]
         , describe "mapOutput"
             [ fuzz (maybe int) "should apply the map function to the output regardless of where it comes from" <|
