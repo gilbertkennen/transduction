@@ -18,7 +18,7 @@ stepper reducer maybeX =
             Continue reducer
 
         Just x ->
-            Trans.reduce reducer x
+            Trans.reduce x reducer
 
 
 {-| Convenience application of `stepper`.

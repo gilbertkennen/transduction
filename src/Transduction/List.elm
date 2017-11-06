@@ -26,7 +26,7 @@ stepper reducer xs =
             Continue reducer
 
         x :: rest ->
-            case Trans.reduce reducer x of
+            case Trans.reduce x reducer of
                 Halt output ->
                     Halt output
 
