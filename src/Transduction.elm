@@ -3,10 +3,15 @@ module Transduction
         ( Transducer
         , Reducer
         , Reply(Continue, Halt)
+        , transduce
+        , reduce
         , compose
+          -- , mapReply
+        , transducer
+        , simpleTransducer
         , cap
         , finish
-        , mapReply
+        , finishReply
         , apply
         , emit
         , fold
@@ -20,7 +25,6 @@ module Transduction
         , intersperse
         , isEmpty
         , length
-        , emitter
         , member
         , partition
         , repeat
@@ -36,25 +40,30 @@ module Transduction
 
 # Functions
 
-@docs compose, cap, finish
+@docs compose, transduce
 
 
 # Construction
 
-@docs mapReply, apply, emit
+Functions from this section should not be required by end-users.
+
+@docs transducer, simpleTransducer, reduce, apply, emit, cap, finish, finishReply
 
 
 # Transducers
 
-@docs mapInput, fold, concat, take, repeatedly, reverse, filter, drop, intersperse, isEmpty, length, emitter, member, partition, repeat
+@docs mapInput, fold, concat, take, repeatedly, reverse, filter, drop, intersperse, isEmpty, length, member, partition, repeat
 
 -}
 
 
-{-| A `Reducer` either ingests an element or an indication that further elements won't be coming and produce a `Reply` (explained below).
+{-| You can't make your own base reducers, just wrap functions around those contained within.
+
+All reducers are based upon a base reducer which returns `Nothing` if no value has been consumed or halts with `Just x` the first time it receives a value.
+
 -}
-type alias Reducer input output =
-    Maybe input -> Reply input output
+type Reducer input output
+    = Reducer (input -> Reply input output) (() -> output)
 
 
 {-| A `Reply` either contains the end output of a `Reducer` or a new `Reducer` ready to ingest another element.
@@ -70,6 +79,13 @@ type alias Transducer afterInput afterOutput thisInput thisOutput =
     Reducer afterInput afterOutput -> Reducer thisInput thisOutput
 
 
+{-| Transform a `Transducer` into a regular function after applying the base `Reducer`.
+-}
+transduce : Transducer afterInput (Maybe afterInput) thisInput thisOutput -> thisInput -> thisOutput
+transduce trans x =
+    reduce (trans cap) x |> finishReply
+
+
 {-| Composes two transducers together. The parameter order is to make chaining using `|>` easier.
 
 `first |> compose second |> compose third`
@@ -83,28 +99,39 @@ compose =
     (>>)
 
 
-{-| A most simple `Reducer` which `Halt`s if it receives a value and continues if it doesn't. Useful for turning a `Transducer` into a `Reducer`.
+{-| The only basic reducer. Not sure if this should halt on receiving its first value or continue. Currently halts.
 -}
-cap : Reducer input input
-cap maybeX =
-    case maybeX of
-        Nothing ->
-            Continue cap
-
-        Just x ->
-            Halt x
+cap : Reducer input (Maybe input)
+cap =
+    Reducer
+        (Halt << Just)
+        (\() -> Nothing)
 
 
-{-| Hopefully get an output from a reply by passing `Nothing` in.
+{-| Apply the reducer to an input value.
 -}
-finish : Reply input output -> output
-finish reply =
+reduce : Reducer input output -> input -> Reply input output
+reduce (Reducer reduceF _) =
+    reduceF
+
+
+{-| Calculate the finished value of a `Reducer`.
+-}
+finish : Reducer input output -> output
+finish (Reducer _ finishF) =
+    finishF ()
+
+
+{-| Calculate the finished value of a `Reply`
+-}
+finishReply : Reply afterInput afterOutput -> afterOutput
+finishReply reply =
     case reply of
-        Halt output ->
-            output
+        Halt x ->
+            x
 
         Continue reducer ->
-            finish (repeatedly reducer Nothing)
+            finish reducer
 
 
 {-| Map the values in a `Reply`, in case the `Transducer` wants to be `Reply` agnostic.
@@ -114,13 +141,13 @@ mapReply :
     -> (afterOutput -> thisOutput)
     -> Reply afterInput afterOutput
     -> Reply thisInput thisOutput
-mapReply transducer finish reply =
+mapReply trans finish reply =
     case reply of
         Halt x ->
             Halt (finish x)
 
         Continue reducer ->
-            Continue (transducer reducer)
+            Continue (trans reducer)
 
 
 {-| Emit a value mapping the reply.
@@ -129,57 +156,79 @@ emit :
     Transducer afterInput afterOutput thisInput thisOutput
     -> (afterOutput -> thisOutput)
     -> Reducer afterInput afterOutput
-    -> Maybe afterInput
+    -> afterInput
     -> Reply thisInput thisOutput
-emit transducer outputMap reducer maybeX =
-    reducer maybeX |> mapReply transducer outputMap
+emit trans outputMap reducer x =
+    case reduce reducer x of
+        Halt x ->
+            Halt (outputMap x)
+
+        Continue newReducer ->
+            Continue (trans newReducer)
 
 
 {-| Applies a `Continue` reducer to the input if possible.
 -}
-apply : Maybe input -> Reply input output -> Reply input output
-apply maybeX reply =
+apply : input -> Reply input output -> Reply input output
+apply x reply =
     case reply of
+        Continue reducer ->
+            reduce reducer x
+
         Halt _ ->
             reply
 
-        Continue reducer ->
-            reducer maybeX
+
+{-| Make a transducer.
+-}
+transducer : (thisInput -> Reducer afterInput afterOutput -> Reply thisInput thisOutput) -> (Reducer afterInput afterOutput -> thisOutput) -> Transducer afterInput afterOutput thisInput thisOutput
+transducer mapReduce mapFinish reducer =
+    Reducer
+        (flip mapReduce reducer)
+        (\() -> mapFinish reducer)
+
+
+{-| Make a simple transducer which doesn't do anything fancy on finish.
+-}
+simpleTransducer : (thisInput -> Reducer afterInput output -> Reply thisInput output) -> Transducer afterInput output thisInput output
+simpleTransducer f ((Reducer _ finishF) as reducer) =
+    Reducer
+        (flip f reducer)
+        finishF
 
 
 {-| Given a function to apply the elements of a collection to a `Reducer`, applies the elements of each collection ingested to the `Reducer`.
 -}
 concat : (Reducer input output -> collection -> Reply input output) -> Transducer input output collection output
-concat stepper reducer maybeX =
-    case maybeX of
-        Nothing ->
-            mapReply (concat stepper) identity (reducer Nothing)
-
-        Just xs ->
-            stepper reducer xs
-                |> mapReply (concat stepper) identity
+concat stepper =
+    simpleTransducer
+        (\xs reducer ->
+            mapReply (concat stepper) identity (stepper reducer xs)
+        )
 
 
 {-| Maps inputs.
 -}
 mapInput : (thisInput -> afterInput) -> Transducer afterInput output thisInput output
-mapInput f reducer maybeX =
-    mapReply (mapInput f) identity (reducer (Maybe.map f maybeX))
+mapInput f =
+    simpleTransducer
+        (\x reducer ->
+            emit (mapInput f) identity reducer (f x)
+        )
 
 
-{-| Applies a standard sort of fold step and emits its state upon ingesting `Nothing`.
+{-| Each element updates the state which emits on finish.
 -}
 fold :
     (input -> state -> state)
     -> state
     -> Transducer state output input output
-fold step state reducer maybeX =
-    case maybeX of
-        Nothing ->
-            mapReply (fold step state) identity (reducer (Just state))
-
-        Just x ->
+fold step state =
+    transducer
+        (\x reducer ->
             Continue (fold step (step x state) reducer)
+        )
+        (\reducer -> reduce reducer state |> finishReply)
 
 
 {-| Upon ingesting an input, just keeps emitting that input until a `Halt` reply is received.
@@ -188,33 +237,34 @@ This `Transducer` is potentially infinite, so make sure that whatever is passed 
 
 -}
 repeatedly : Transducer afterInput output afterInput output
-repeatedly reducer input =
-    case reducer input of
-        Halt x ->
-            Halt x
+repeatedly =
+    simpleTransducer
+        (\input reducer ->
+            case reduce reducer input of
+                Halt x ->
+                    Halt x
 
-        Continue newReduction ->
-            repeatedly newReduction input
+                Continue newReduction ->
+                    reduce (repeatedly newReduction) input
+        )
 
 
 {-| If `n <= 0`, then `Halt` without emitting. Otherwise, pass through until `n` elements have been emitted.
 -}
 take : Int -> Transducer input output input output
-take n reducer maybeX =
-    case maybeX of
-        Nothing ->
-            mapReply (take n) identity (reducer maybeX)
-
-        Just _ ->
+take n =
+    simpleTransducer
+        (\x reducer ->
             if n <= 0 then
-                Halt (finish (Continue reducer))
+                Halt (finish reducer)
             else if n == 1 then
-                Halt (finish (reducer maybeX))
+                reduce reducer x |> finishReply |> Halt
             else
-                mapReply (take (n - 1)) identity (reducer maybeX)
+                emit (take (n - 1)) identity reducer x
+        )
 
 
-{-| On Nothing, emits a list of elements received in reverse order.
+{-| On finish, emits a list of elements received in reverse order.
 -}
 reverse : Transducer (List input) output input output
 reverse =
@@ -222,59 +272,54 @@ reverse =
 
 
 reverseHelper : List input -> Transducer (List input) output input output
-reverseHelper state reducer maybeX =
-    case maybeX of
-        Nothing ->
-            mapReply reverse identity (reducer (Just state))
-
-        Just x ->
+reverseHelper state =
+    transducer
+        (\x reducer ->
             Continue (reverseHelper (x :: state) reducer)
+        )
+        (\reducer ->
+            reduce reducer state |> finishReply
+        )
 
 
 {-| Emits values where predicate is true.
 -}
 filter : (input -> Bool) -> Transducer input output input output
-filter predicate reducer maybeX =
-    case maybeX of
-        Nothing ->
-            mapReply (filter predicate) identity (reducer Nothing)
-
-        Just x ->
+filter predicate =
+    simpleTransducer
+        (\x reducer ->
             if predicate x then
-                mapReply (filter predicate) identity (reducer (Just x))
+                emit (filter predicate) identity reducer x
             else
                 Continue (filter predicate reducer)
+        )
 
 
 {-| Ignore the first n elements and then emit everything else.
 -}
 drop : Int -> Transducer input output input output
-drop n reducer maybeX =
-    case maybeX of
-        Nothing ->
-            mapReply (drop n) identity (reducer maybeX)
-
-        Just _ ->
+drop n =
+    simpleTransducer
+        (\x reducer ->
             if n <= 0 then
-                mapReply identity identity (reducer maybeX)
+                emit identity identity reducer x
             else
                 Continue (drop (n - 1) reducer)
+        )
 
 
 {-| Emits the padding value before each value after the first.
 -}
 intersperse : input -> Transducer input output input output
-intersperse padding reducer maybeX =
-    case maybeX of
-        Nothing ->
-            emit (intersperse padding) identity reducer maybeX
-
-        Just _ ->
+intersperse padding =
+    simpleTransducer
+        (\x reducer ->
             emit
                 (mapInput (\x -> [ padding, x ]) |> compose (concat listStepper))
                 identity
                 reducer
-                maybeX
+                x
+        )
 
 
 listStepper : Reducer input output -> List input -> Reply input output
@@ -284,7 +329,7 @@ listStepper reducer xs =
             Continue reducer
 
         x :: rest ->
-            case reducer (Just x) of
+            case reduce reducer x of
                 Halt output ->
                     Halt output
 
@@ -292,73 +337,62 @@ listStepper reducer xs =
                     listStepper nextReducer rest
 
 
-{-| Emits True on `Nothing` and False on `Just`.
+{-| Emits `False` and `Halt`s if it receives an element. Emits `True` on finish.
 -}
 isEmpty : Transducer Bool output input output
-isEmpty reducer maybeX =
-    case maybeX of
-        Nothing ->
-            emit isEmpty identity reducer (Just True)
+isEmpty =
+    transducer
+        (\x reducer ->
+            Halt (reduce reducer False |> finishReply)
+        )
+        (\reducer ->
+            reduce reducer True |> finishReply
+        )
 
-        Just _ ->
-            emit (mapInput (always False)) identity reducer (Just False)
 
-
-{-| Emits the number of elements seen upon ingesting `Nothing`.
+{-| Emits the number of elements seen on finish.
 -}
 length : Transducer Int output input output
 length =
     lengthHelper 0
 
 
-{-| Emits a count of elements seen on `Nothing`
+{-| Emits a count of elements seen on finish.
 -}
 lengthHelper : Int -> Transducer Int output input output
-lengthHelper count reducer maybeX =
-    case maybeX of
-        Nothing ->
-            emit (lengthHelper count) identity reducer (Just count)
-
-        Just _ ->
+lengthHelper count =
+    transducer
+        (\x reducer ->
             Continue (lengthHelper (count + 1) reducer)
+        )
+        (\reducer ->
+            reduce reducer count |> finishReply
+        )
 
 
-{-| Emits provided value upon ingesting `Nothing`.
--}
-emitter : afterInput -> Transducer afterInput output thisInput output
-emitter value reducer maybeX =
-    case maybeX of
-        Nothing ->
-            emit (emitter value) identity reducer (Just value)
-
-        Just _ ->
-            Continue (emitter value reducer)
-
-
-{-| Upon ingesting `Nothing`, emits a `Bool` indicating whether the value has been seen.
+{-| Emits a `Bool` indicating whether the value has been seen on finish.
 -}
 member : input -> Transducer Bool output input output
-member comp reducer maybeX =
-    case maybeX of
-        Nothing ->
-            emit (member comp) identity reducer (Just False)
-
-        Just x ->
+member comp =
+    transducer
+        (\x reducer ->
             if x == comp then
-                Continue (emitter True reducer)
+                reduce reducer True |> finishReply |> Halt
             else
                 Continue (member comp reducer)
+        )
+        (\reducer -> reduce reducer False |> finishReply)
 
 
-{-| "Applies one of two different reducers depending on the predicate. Emits a tuple of the reducers output upon ingesting `Nothing`."
+{-| "Applies one of two different reducers depending on the predicate. Emits a tuple of the reducers output on finish.."
 -}
 partition :
     (input -> Bool)
-    -> Reducer input trueOutput
-    -> Reducer input falseOutput
+    -> Transducer trueInput (Maybe trueInput) input trueOutput
+    -> Transducer falseInput (Maybe falseInput) input falseOutput
     -> Transducer ( trueOutput, falseOutput ) output input output
 partition predicate trueReducer falseReducer =
-    partitionHelper predicate (Continue trueReducer) (Continue falseReducer)
+    partitionHelper predicate (Continue (trueReducer cap)) (Continue (falseReducer cap))
 
 
 partitionHelper :
@@ -366,37 +400,33 @@ partitionHelper :
     -> Reply input trueOutput
     -> Reply input falseOutput
     -> Transducer ( trueOutput, falseOutput ) output input output
-partitionHelper predicate trueReply falseReply reducer maybeX =
-    case maybeX of
-        Nothing ->
-            emit
-                (partitionHelper predicate trueReply falseReply)
-                identity
-                reducer
-                (Just ( finish trueReply, finish falseReply ))
-
-        Just x ->
+partitionHelper predicate trueReply falseReply =
+    transducer
+        (\x reducer ->
             if predicate x then
-                Continue (partitionHelper predicate (apply (Just x) trueReply) falseReply reducer)
+                Continue (partitionHelper predicate (apply x trueReply) falseReply reducer)
             else
-                Continue (partitionHelper predicate trueReply (apply (Just x) falseReply) reducer)
+                Continue (partitionHelper predicate trueReply (apply x falseReply) reducer)
+        )
+        (\reducer ->
+            reduce reducer ( finishReply trueReply, finishReply falseReply )
+                |> finishReply
+        )
 
 
-{-| Upon ingesting the tuple, emits the second command n times.
+{-| Upon ingesting the tuple, emits the value n times.
 -}
-repeat : Transducer input output ( Int, Maybe input ) output
-repeat reducer maybeX =
-    case maybeX of
-        Nothing ->
-            emit repeat identity reducer Nothing
-
-        Just ( n, x ) ->
+repeat : Transducer input output ( Int, input ) output
+repeat =
+    simpleTransducer
+        (\( n, x ) reducer ->
             doRepeat n x (Continue reducer)
                 |> mapReply repeat identity
+        )
 
 
-doRepeat : Int -> Maybe input -> Reply input output -> Reply input output
-doRepeat n maybeX reply =
+doRepeat : Int -> input -> Reply input output -> Reply input output
+doRepeat n x reply =
     if n <= 0 then
         reply
     else
@@ -405,4 +435,4 @@ doRepeat n maybeX reply =
                 reply
 
             Continue reducer ->
-                doRepeat (n - 1) maybeX (reducer maybeX)
+                doRepeat (n - 1) x (reduce reducer x)

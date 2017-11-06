@@ -1,9 +1,9 @@
-module Transduction.List exposing (stepper, reducer, concat, reduce)
+module Transduction.List exposing (stepper, concat, reduce)
 
 {-| A stepper function for use with `Transducer`s like `concat`.
 -}
 
-import Transduction
+import Transduction as Trans
     exposing
         ( Reducer
         , Reply(Continue, Halt)
@@ -11,8 +11,6 @@ import Transduction
         , fold
         , compose
         , mapInput
-        , cap
-        , finish
         )
 
 
@@ -23,7 +21,7 @@ stepper reducer xs =
             Continue reducer
 
         x :: rest ->
-            case reducer (Just x) of
+            case Trans.reduce reducer x of
                 Halt output ->
                     Halt output
 
@@ -31,22 +29,15 @@ stepper reducer xs =
                     stepper nextReducer rest
 
 
-{-| When you want the output to be a `List input`.
--}
-reducer : Reducer input (List input)
-reducer =
-    fold (::) [] |> compose (mapInput List.reverse) |> (|>) cap
-
-
 {-| A special concat just for `List`s.
 -}
 concat : Transducer input output (List input) output
 concat =
-    Transduction.concat stepper
+    Trans.concat stepper
 
 
 {-| Reduce given a transducer.
 -}
-reduce : Transducer afterInput afterInput thisInput thisOutput -> List thisInput -> thisOutput
+reduce : Transducer afterInput (Maybe afterInput) thisInput thisOutput -> List thisInput -> thisOutput
 reduce transducer xs =
-    (concat |> compose transducer) cap (Just xs) |> finish
+    Trans.transduce (concat |> compose transducer) xs

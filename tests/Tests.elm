@@ -16,76 +16,35 @@ import Transduction.List as TList
 infixr 8 |->
 
 
-expect : List input -> T.Transducer Expect.Expectation output input output
-expect xs reduction maybeX =
-    let
-        fail message =
-            Just (Expect.fail message)
-                |> reduction
-                |> T.mapReply (expect xs) identity
-    in
-        case ( maybeX, xs ) of
-            ( Nothing, [] ) ->
-                (reduction (Just Expect.pass))
-                    |> T.mapReply (expect []) identity
+expect : List input -> T.Transducer Expect.Expectation output input Expect.Expectation
+expect xs =
+    T.transducer
+        (\x reducer ->
+            case xs of
+                [] ->
+                    T.Halt <| Expect.fail ("Tried to consume " ++ toString x ++ " but list is empty.")
 
-            ( Just x, [] ) ->
-                fail ("Tried to consume " ++ toString x ++ " but list is empty.")
+                y :: rest ->
+                    if x == y then
+                        T.Continue (expect rest reducer)
+                    else
+                        T.Halt <| Expect.fail ("Was given " ++ toString x ++ " but expected " ++ toString y)
+        )
+        (\reducer ->
+            case xs of
+                [] ->
+                    Expect.pass
 
-            ( Nothing, xs ) ->
-                fail ("Did not consume: " ++ toString xs)
-
-            ( Just x, y :: rest ) ->
-                if x == y then
-                    T.Continue (expect rest reduction)
-                else
-                    fail ("Was given " ++ toString x ++ " but expected " ++ toString y)
+                _ ->
+                    Expect.fail ("Did not consume: " ++ toString xs)
+        )
 
 
 
--- emitterSuite : Test
--- emitterSuite =
---     describe "Steppers"
---         [ describe "list stepper"
---             [ fuzz (list int) "should emit elements in order" <|
---                 \xs ->
---                     T.reduce (TList.emitter xs |-> expect xs)
---             , fuzz2 int (list int) "should stop early when halted" <|
---                 \n xs ->
---                     T.reduce
---                         (TList.emitter xs |-> Trans.take n |-> expect (List.take n xs))
---             ]
---         ]
--- reducerSuite : Test
--- reducerSuite =
---     describe "Reducers"
---         [ describe "list reducer"
---             [ fuzz (list int) "returns a list of elements in order" <|
---                 \xs ->
---                     xs
---                         |> listReduce TList.reducer
---                         |> Expect.equal xs
---             ]
---         ]
-
-
-basicsSuite : Test
-basicsSuite =
-    describe "Basics"
-        [ describe "cap"
-            [ test "should `Continue` on `Nothing`" <|
-                \() ->
-                    case T.cap Nothing of
-                        T.Continue _ ->
-                            Expect.pass
-
-                        T.Halt _ ->
-                            Expect.fail "halted"
-            , fuzz int "should `Halt x` on `Just x`" <|
-                \x ->
-                    Expect.equal (T.cap (Just x)) (T.Halt x)
-            ]
-        ]
+-- basicsSuite : Test
+-- basicsSuite =
+--     describe "Basics"
+--         []
 
 
 transducerSuite : Test
@@ -98,17 +57,29 @@ transducerSuite =
                         f =
                             (+) 1
                     in
-                        TList.reduce (T.mapInput f |-> expect (List.map f xs)) xs
+                        TList.reduce
+                            (T.mapInput f
+                                |-> expect (List.map f xs)
+                            )
+                            xs
             ]
         , describe "take"
             [ fuzz2 int (list int) "should take (at most) the first n elements" <|
                 \n xs ->
-                    TList.reduce (T.take n |-> expect (List.take n xs)) xs
+                    TList.reduce
+                        (T.take n
+                            |-> expect (List.take n xs)
+                        )
+                        xs
             ]
         , describe "drop"
             [ fuzz2 int (list int) "should skip the first n elements" <|
                 \n xs ->
-                    TList.reduce (T.drop n |-> expect (List.drop n xs)) xs
+                    TList.reduce
+                        (T.drop n
+                            |-> expect (List.drop n xs)
+                        )
+                        xs
             ]
         , describe "concat"
             [ fuzz (list (list int)) "should send elements in order, deconstructing one level of `List`" <|
@@ -124,25 +95,32 @@ transducerSuite =
                 \xs ->
                     TList.reduce
                         (T.reverse
-                            |-> T.take 1
                             |-> T.concat TList.stepper
                             |-> expect (List.reverse xs)
                         )
                         xs
             ]
         , describe "filter"
-            [ fuzz (list int) "should filter out False values" <|
+            [ fuzz (list int) "should filter out `False` values" <|
                 \xs ->
                     let
                         predicate =
                             (\x -> x % 2 == 0)
                     in
-                        TList.reduce (T.filter predicate |-> expect (List.filter predicate xs)) xs
+                        TList.reduce
+                            (T.filter predicate
+                                |-> expect (List.filter predicate xs)
+                            )
+                            xs
             ]
         , describe "intersperse"
             [ fuzz (list int) "should put an extra element between each other element." <|
                 \xs ->
-                    TList.reduce (T.intersperse 0 |-> expect (List.intersperse 0 xs)) xs
+                    TList.reduce
+                        (T.intersperse 0
+                            |-> expect (List.intersperse 0 xs)
+                        )
+                        xs
             ]
         , describe "repeatedly"
             [ fuzz int "should just keep emitting whatever it was given until it receives `Halt`" <|
@@ -151,34 +129,52 @@ transducerSuite =
                         n =
                             128
                     in
-                        (T.repeatedly |-> T.take n |-> expect (List.repeat n x)) T.cap (Just x) |> T.finish
+                        T.transduce
+                            (T.repeatedly
+                                |-> T.take n
+                                |-> expect (List.repeat n x)
+                            )
+                            x
             ]
         , describe "fold"
-            [ fuzz (list int) "should fold values until it receives `Nothing`" <|
+            [ fuzz (list int) "should fold values until it finishes" <|
                 \xs ->
                     let
                         sum =
                             List.sum xs
                     in
-                        TList.reduce (T.fold (+) 0 |-> T.take 2 |-> expect ([ sum, sum ])) xs
+                        TList.reduce
+                            (T.fold (+) 0
+                                |-> expect ([ sum ])
+                            )
+                            xs
             ]
         , describe "isEmpty"
             [ fuzz (list unit) "emits True on empty and False on non-empty" <|
                 \xs ->
-                    TList.reduce T.isEmpty xs
-                        |> Expect.equal (List.isEmpty xs)
+                    TList.reduce
+                        (T.isEmpty
+                            |-> expect [ List.isEmpty xs ]
+                        )
+                        xs
             ]
         , describe "length"
-            [ fuzz (list unit) "emits a count of elements on Nothing" <|
+            [ fuzz (list unit) "emits a count of elements on finish" <|
                 \xs ->
-                    TList.reduce T.length xs
-                        |> Expect.equal (List.length xs)
+                    TList.reduce
+                        (T.length
+                            |-> expect [ List.length xs ]
+                        )
+                        xs
             ]
         , describe "member" <|
-            [ fuzz2 int (list int) "upon ingesting `Nothing` emits `False` if the item has not been seen and `True` if it has." <|
+            [ fuzz2 int (list int) "emits `True` and `Halt`s if it receives the value and emits `False` on finish" <|
                 \x xs ->
-                    TList.reduce (T.member x) xs
-                        |> Expect.equal (List.member x xs)
+                    TList.reduce
+                        (T.member x
+                            |-> expect [ List.member x xs ]
+                        )
+                        xs
             ]
         , describe "partition" <|
             [ fuzz (list int) "should sort and reduce items based on the predicate" <|
@@ -187,16 +183,13 @@ transducerSuite =
                         predicate =
                             (\x -> x % 2 == 0)
                     in
-                        xs
-                            |> TList.reduce
-                                (T.partition predicate
-                                    (T.reverse T.cap)
-                                    (T.length T.cap)
-                                )
-                            |> Expect.equal
-                                (List.partition predicate xs
-                                    |> (\( trues, falses ) -> ( List.reverse trues, List.length falses ))
-                                )
+                        TList.reduce
+                            (T.partition predicate
+                                T.reverse
+                                T.length
+                                |-> expect [ ( Just <| List.reverse (List.filter predicate xs), Just <| List.length (List.filter (not << predicate) xs) ) ]
+                            )
+                            xs
             ]
         , describe "repeat"
             [ fuzz (list (tuple ( intRange 0 128, int ))) "should emit the value n times" <|
@@ -204,10 +197,7 @@ transducerSuite =
                     let
                         repeats =
                             List.concatMap (uncurry List.repeat) xs
-
-                        maybeXs =
-                            List.map (\( n, x ) -> ( n, Just x )) xs
                     in
-                        TList.reduce (T.repeat |-> expect repeats) maybeXs
+                        TList.reduce (T.repeat |-> expect repeats) xs
             ]
         ]
