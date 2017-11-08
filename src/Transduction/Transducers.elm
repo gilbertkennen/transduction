@@ -1,6 +1,7 @@
 module Transduction.Transducers
     exposing
         ( transduce
+        , compose
         , last
         , concat
         , take
@@ -22,7 +23,7 @@ module Transduction.Transducers
 
 {-| Actual `Transducer` implementations.
 
-@docs transduce
+@docs transduce, compose
 
 
 # Transducers
@@ -35,7 +36,6 @@ import Transduction
     exposing
         ( Reducer
         , Transducer
-        , compose
         , transducer
         , simpleTransducer
         , emit
@@ -54,6 +54,19 @@ import Transduction.List.Shared as TList
 transduce : Transducer afterInput (Maybe afterInput) thisInput thisOutput -> thisInput -> thisOutput
 transduce trans x =
     finishWith x (compose last trans unit)
+
+
+{-| Composes two transducers together. The parameter order is to make chaining using `|>` easier.
+
+`first |> compose second |> compose third`
+
+-}
+compose :
+    Transducer afterInput afterOutput middleInput middleOutput
+    -> Transducer middleInput middleOutput thisInput thisOutput
+    -> Transducer afterInput afterOutput thisInput thisOutput
+compose =
+    (>>)
 
 
 {-| An example of a transducer which doesn't care about what reducer it receives. Effectively a `Reducer`, but not technically.

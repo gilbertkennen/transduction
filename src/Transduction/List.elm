@@ -10,7 +10,6 @@ import Transduction as Trans
     exposing
         ( Reducer
         , Transducer
-        , compose
         )
 import Transduction.List.Shared as TListS
 import Transduction.Transducers as Transducers
@@ -34,4 +33,4 @@ concat =
 -}
 transduce : Transducer afterInput (Maybe afterInput) thisInput thisOutput -> List thisInput -> thisOutput
 transduce transducer xs =
-    Transducers.transduce (concat |> compose transducer) xs
+    Transducers.transduce (concat |> Transducers.compose transducer) xs

@@ -3,7 +3,6 @@ module Transduction
         ( Transducer
         , Reducer
         , reduce
-        , compose
         , isHalted
         , halt
         , transducer
@@ -20,11 +19,6 @@ module Transduction
 # Types
 
 @docs Reducer, Transducer
-
-
-# Functions
-
-@docs compose
 
 
 # Construction
@@ -49,19 +43,6 @@ type Reducer input output
 -}
 type alias Transducer afterInput afterOutput thisInput thisOutput =
     Reducer afterInput afterOutput -> Reducer thisInput thisOutput
-
-
-{-| Composes two transducers together. The parameter order is to make chaining using `|>` easier.
-
-`first |> compose second |> compose third`
-
--}
-compose :
-    Transducer afterInput afterOutput middleInput middleOutput
-    -> Transducer middleInput middleOutput thisInput thisOutput
-    -> Transducer afterInput afterOutput thisInput thisOutput
-compose =
-    (>>)
 
 
 {-| A basic `Reducer` which is halted and outputs `()`

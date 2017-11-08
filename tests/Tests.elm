@@ -14,7 +14,7 @@ import Transduction.Maybe as TMaybe
     -> Trans.Transducer afterInput afterResult betweenInput betweenResult
     -> Trans.Transducer afterInput afterResult thisInput thisResult
 (|->) =
-    flip Trans.compose
+    flip T.compose
 infixr 8 |->
 
 
