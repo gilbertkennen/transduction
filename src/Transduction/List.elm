@@ -17,7 +17,7 @@ import Transduction.Transducers as Transducers
 
 {-| Reduce elements of a `List` in order.
 -}
-stepper : Reducer input output -> List input -> Reducer input output
+stepper : List input -> Reducer input output -> Reducer input output
 stepper =
     TListS.stepper
 

@@ -86,12 +86,12 @@ lastHelper input =
 {-| Given a function to apply the elements of a collection to a `Reducer`, applies the elements of each collection ingested to the `Reducer`.
 -}
 concat :
-    (Reducer input output -> collection -> Reducer input output)
+    (collection -> Reducer input output -> Reducer input output)
     -> Transducer input output collection output
 concat stepper =
     simpleTransducer
         (\xs reducer ->
-            concat stepper (stepper reducer xs)
+            concat stepper (stepper xs reducer)
         )
 
 

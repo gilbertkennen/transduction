@@ -5,8 +5,8 @@ import Transduction as Trans exposing (Reducer)
 
 {-| Reduce elements of a `List` in order.
 -}
-stepper : Reducer input output -> List input -> Reducer input output
-stepper reducer xs =
+stepper : List input -> Reducer input output -> Reducer input output
+stepper xs reducer =
     case xs of
         [] ->
             reducer
@@ -15,4 +15,4 @@ stepper reducer xs =
             if Trans.isHalted reducer then
                 reducer
             else
-                stepper (Trans.reduce x reducer) rest
+                stepper rest (Trans.reduce x reducer)
