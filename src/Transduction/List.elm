@@ -9,7 +9,6 @@ module Transduction.List exposing (stepper, concat, transduce)
 import Transduction as Trans
     exposing
         ( Reducer
-        , Reply(Continue, Halt)
         , Transducer
         , fold
         , compose
@@ -19,19 +18,17 @@ import Transduction as Trans
 
 {-| Reduce elements of a `List` in order.
 -}
-stepper : Reducer input output -> List input -> Reply input output
+stepper : Reducer input output -> List input -> Reducer input output
 stepper reducer xs =
     case xs of
         [] ->
-            Continue reducer
+            reducer
 
         x :: rest ->
-            case Trans.reduce x reducer of
-                Halt output ->
-                    Halt output
-
-                Continue nextReducer ->
-                    stepper nextReducer rest
+            if Trans.isHalted reducer then
+                reducer
+            else
+                stepper (Trans.reduce x reducer) rest
 
 
 {-| A special concat just for `List`s.

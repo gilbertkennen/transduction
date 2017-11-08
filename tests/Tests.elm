@@ -23,13 +23,13 @@ expect xs =
         (\x reducer ->
             case xs of
                 [] ->
-                    T.Halt <| Expect.fail ("Tried to consume " ++ toString x ++ " but list is empty.")
+                    T.halt <| Expect.fail ("Tried to consume " ++ toString x ++ " but list is empty.")
 
                 y :: rest ->
                     if x == y then
-                        T.Continue (expect rest reducer)
+                        expect rest reducer
                     else
-                        T.Halt <| Expect.fail ("Was given " ++ toString x ++ " but expected " ++ toString y)
+                        T.halt <| Expect.fail ("Was given " ++ toString x ++ " but expected " ++ toString y)
         )
         (\reducer ->
             case xs of

@@ -6,16 +6,20 @@ module Transduction.Maybe exposing (stepper, maybe)
 
 -}
 
-import Transduction as Trans exposing (Reducer, Reply(Continue, Halt), Transducer)
+import Transduction as Trans
+    exposing
+        ( Reducer
+        , Transducer
+        )
 
 
 {-| When you only want to emit when you have a value.
 -}
-stepper : Reducer input output -> Maybe input -> Reply input output
+stepper : Reducer input output -> Maybe input -> Reducer input output
 stepper reducer maybeX =
     case maybeX of
         Nothing ->
-            Continue reducer
+            reducer
 
         Just x ->
             Trans.reduce x reducer
