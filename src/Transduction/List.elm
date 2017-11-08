@@ -12,32 +12,26 @@ import Transduction as Trans
         , Transducer
         , compose
         )
+import Transduction.List.Shared as TListS
+import Transduction.Transducers as Transducers
 
 
 {-| Reduce elements of a `List` in order.
 -}
 stepper : Reducer input output -> List input -> Reducer input output
-stepper reducer xs =
-    case xs of
-        [] ->
-            reducer
-
-        x :: rest ->
-            if Trans.isHalted reducer then
-                reducer
-            else
-                stepper (Trans.reduce x reducer) rest
+stepper =
+    TListS.stepper
 
 
 {-| A special concat just for `List`s.
 -}
 concat : Transducer input output (List input) output
 concat =
-    Trans.concat stepper
+    Transducers.concat stepper
 
 
 {-| Run the transducer against a `List` of inputs.
 -}
 transduce : Transducer afterInput (Maybe afterInput) thisInput thisOutput -> List thisInput -> thisOutput
 transduce transducer xs =
-    Trans.transduce (concat |> compose transducer) xs
+    Transducers.transduce (concat |> compose transducer) xs

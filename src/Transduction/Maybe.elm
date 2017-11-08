@@ -11,6 +11,7 @@ import Transduction as Trans
         ( Reducer
         , Transducer
         )
+import Transduction.Transducers as Transducers
 
 
 {-| When you only want to emit when you have a value.
@@ -29,4 +30,4 @@ stepper reducer maybeX =
 -}
 maybe : Transducer input output (Maybe input) output
 maybe =
-    Trans.concat stepper
+    Transducers.concat stepper

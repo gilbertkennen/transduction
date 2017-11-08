@@ -2,19 +2,16 @@ module Transduction
     exposing
         ( Transducer
         , Reducer
-        , transduce
         , reduce
         , compose
         , isHalted
         , halt
         , transducer
         , simpleTransducer
-        , last
         , unit
         , finish
         , finishWith
         , emit
-        , concat
         )
 
 {-| Transducers are composable structures which process elements one at a time.
@@ -27,14 +24,14 @@ module Transduction
 
 # Functions
 
-@docs compose, transduce
+@docs compose
 
 
 # Construction
 
 Functions from this section should not be required by end-users.
 
-@docs transducer, simpleTransducer, reduce, emit, last, finish, finishWith, halt, isHalted, concat, unit
+@docs transducer, simpleTransducer, reduce, emit, finish, finishWith, halt, isHalted, unit
 
 -}
 
@@ -52,13 +49,6 @@ type Reducer input output
 -}
 type alias Transducer afterInput afterOutput thisInput thisOutput =
     Reducer afterInput afterOutput -> Reducer thisInput thisOutput
-
-
-{-| Transform a `Transducer` into a regular function after applying the base `Reducer`.
--}
-transduce : Transducer afterInput (Maybe afterInput) thisInput thisOutput -> thisInput -> thisOutput
-transduce trans x =
-    finishWith x (compose last trans unit)
 
 
 {-| Composes two transducers together. The parameter order is to make chaining using `|>` easier.
@@ -79,20 +69,6 @@ compose =
 unit : Reducer a ()
 unit =
     halt ()
-
-
-{-| A basic transducer which always continues with the last value ingested.
--}
-last : Transducer Never never input (Maybe input)
-last =
-    capHelper Nothing
-
-
-capHelper : Maybe input -> Transducer Never never input (Maybe input)
-capHelper input =
-    transducer
-        (capHelper << Just)
-        (\_ -> input)
 
 
 {-| Apply the reducer to an input value.
@@ -167,15 +143,3 @@ simpleTransducer f ((Reducer _ finishF) as reducer) =
     Reducer
         (Just (flip f reducer))
         finishF
-
-
-{-| Given a function to apply the elements of a collection to a `Reducer`, applies the elements of each collection ingested to the `Reducer`.
--}
-concat :
-    (Reducer input output -> collection -> Reducer input output)
-    -> Transducer input output collection output
-concat stepper =
-    simpleTransducer
-        (\xs reducer ->
-            concat stepper (stepper reducer xs)
-        )

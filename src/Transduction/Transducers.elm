@@ -20,12 +20,14 @@ module Transduction.Transducers
         , withDefault
         )
 
-{-|
+{-| Actual `Transducer` implementations.
+
+@docs transduce
 
 
 # Transducers
 
-@docs mapInput, mapOutput, fold, concat, take, repeatedly, reverse, filter, drop, intersperse, isEmpty, length, member, partition, repeat, withDefault
+@docs last, mapInput, mapOutput, fold, concat, take, repeatedly, reverse, filter, drop, intersperse, isEmpty, length, member, partition, repeat, withDefault
 
 -}
 
@@ -44,17 +46,28 @@ import Transduction
         , isHalted
         , reduce
         )
-import Transduction.List as TList
+import Transduction.List.Shared as TList
 
 
+{-| Actually apply your transducer. Automatically composes `last` to the end.
+-}
 transduce : Transducer afterInput (Maybe afterInput) thisInput thisOutput -> thisInput -> thisOutput
-transduce =
-    Transduction.transduce
+transduce trans x =
+    finishWith x (compose last trans unit)
 
 
+{-| An example of a transducer which doesn't care about what reducer it receives. Effectively a `Reducer`, but not technically.
+-}
 last : Transducer Never never input (Maybe input)
 last =
-    Transduction.last
+    lastHelper Nothing
+
+
+lastHelper : Maybe input -> Transducer Never never input (Maybe input)
+lastHelper input =
+    transducer
+        (lastHelper << Just)
+        (\_ -> input)
 
 
 {-| Given a function to apply the elements of a collection to a `Reducer`, applies the elements of each collection ingested to the `Reducer`.
@@ -62,8 +75,11 @@ last =
 concat :
     (Reducer input output -> collection -> Reducer input output)
     -> Transducer input output collection output
-concat =
-    Transduction.concat
+concat stepper =
+    simpleTransducer
+        (\xs reducer ->
+            concat stepper (stepper reducer xs)
+        )
 
 
 {-| Maps inputs.
