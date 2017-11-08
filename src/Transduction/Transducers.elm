@@ -1,6 +1,7 @@
 module Transduction.Transducers
     exposing
         ( transduce
+        , last
         , concat
         , take
         , repeatedly
@@ -39,7 +40,7 @@ import Transduction
         , finish
         , finishWith
         , halt
-        , cap
+        , unit
         , isHalted
         , reduce
         )
@@ -49,6 +50,11 @@ import Transduction.List as TList
 transduce : Transducer afterInput (Maybe afterInput) thisInput thisOutput -> thisInput -> thisOutput
 transduce =
     Transduction.transduce
+
+
+last : Transducer Never never input (Maybe input)
+last =
+    Transduction.last
 
 
 {-| Given a function to apply the elements of a collection to a `Reducer`, applies the elements of each collection ingested to the `Reducer`.
@@ -225,7 +231,7 @@ partition :
     -> Transducer falseInput (Maybe falseInput) input falseOutput
     -> Transducer ( trueOutput, falseOutput ) output input output
 partition predicate trueReducer falseReducer =
-    partitionHelper predicate (trueReducer cap) (falseReducer cap)
+    partitionHelper predicate (compose last trueReducer unit) (compose last falseReducer unit)
 
 
 partitionHelper :

@@ -9,7 +9,8 @@ module Transduction
         , halt
         , transducer
         , simpleTransducer
-        , cap
+        , last
+        , unit
         , finish
         , finishWith
         , emit
@@ -33,7 +34,7 @@ module Transduction
 
 Functions from this section should not be required by end-users.
 
-@docs transducer, simpleTransducer, reduce, emit, cap, finish, finishWith, halt, isHalted, concat
+@docs transducer, simpleTransducer, reduce, emit, last, finish, finishWith, halt, isHalted, concat, unit
 
 -}
 
@@ -57,7 +58,7 @@ type alias Transducer afterInput afterOutput thisInput thisOutput =
 -}
 transduce : Transducer afterInput (Maybe afterInput) thisInput thisOutput -> thisInput -> thisOutput
 transduce trans x =
-    finishWith x (trans cap)
+    finishWith x (compose last trans unit)
 
 
 {-| Composes two transducers together. The parameter order is to make chaining using `|>` easier.
@@ -73,23 +74,25 @@ compose =
     (>>)
 
 
+{-| A basic `Reducer` which is halted and outputs `()`
+-}
 unit : Reducer a ()
 unit =
-    Reducer Nothing identity
+    halt ()
 
 
-{-| A basic reducer which always continues with the last value ingested.
+{-| A basic transducer which always continues with the last value ingested.
 -}
-cap : Reducer input (Maybe input)
-cap =
+last : Transducer Never never input (Maybe input)
+last =
     capHelper Nothing
 
 
-capHelper : Maybe input -> Reducer input (Maybe input)
+capHelper : Maybe input -> Transducer Never never input (Maybe input)
 capHelper input =
-    Reducer
-        (Just (capHelper << Just))
-        (\() -> input)
+    transducer
+        (capHelper << Just)
+        (\_ -> input)
 
 
 {-| Apply the reducer to an input value.
