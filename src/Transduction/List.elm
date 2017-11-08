@@ -10,9 +10,7 @@ import Transduction as Trans
     exposing
         ( Reducer
         , Transducer
-        , fold
         , compose
-        , mapInput
         )
 
 

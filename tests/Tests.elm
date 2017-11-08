@@ -3,33 +3,35 @@ module Tests exposing (..)
 import Test exposing (..)
 import Expect
 import Fuzz exposing (..)
-import Transduction as T
+import Transduction as Trans
+import Transduction.Transducers as T
 import Transduction.List as TList
 import Transduction.Maybe as TMaybe
 
 
 (|->) :
-    T.Transducer betweenInput betweenResult thisInput thisResult
-    -> T.Transducer afterInput afterResult betweenInput betweenResult
-    -> T.Transducer afterInput afterResult thisInput thisResult
+    Trans.Transducer betweenInput betweenResult thisInput thisResult
+    -> Trans.Transducer afterInput afterResult betweenInput betweenResult
+    -> Trans.Transducer afterInput afterResult thisInput thisResult
 (|->) =
-    flip T.compose
+    flip Trans.compose
 infixr 8 |->
 
 
-expect : List input -> T.Transducer Never (Maybe Never) input Expect.Expectation
+expect : List input -> Trans.Transducer Never (Maybe Never) input Expect.Expectation
 expect xs =
-    T.transducer
+    Trans.transducer
         (\x reducer ->
             case xs of
                 [] ->
-                    T.halt <| Expect.fail ("Tried to consume " ++ toString x ++ " but list is empty.")
+                    Trans.halt <| Expect.fail ("Tried to consume " ++ toString x ++ " but list is empty.")
 
                 y :: rest ->
                     if x == y then
                         expect rest reducer
                     else
-                        T.halt <| Expect.fail ("Was given " ++ toString x ++ " but expected " ++ toString y)
+                        Trans.halt <|
+                            Expect.fail ("Was given " ++ toString x ++ " but expected " ++ toString y)
         )
         (\reducer ->
             case xs of
@@ -188,7 +190,11 @@ transducerSuite =
                             (T.partition predicate
                                 (T.reverse |-> T.withDefault [])
                                 (T.length |-> T.withDefault 0)
-                                |-> expect [ ( List.reverse (List.filter predicate xs), List.length (List.filter (not << predicate) xs) ) ]
+                                |-> expect
+                                        [ ( List.reverse (List.filter predicate xs)
+                                          , List.length (List.filter (not << predicate) xs)
+                                          )
+                                        ]
                             )
                             xs
             ]
@@ -202,7 +208,7 @@ transducerSuite =
                         TList.transduce (T.repeat |-> expect repeats) xs
             ]
         , describe "mapOutput"
-            [ fuzz (maybe int) "should apply the map function to the output regardless of where it comes from" <|
+            [ fuzz (maybe int) "should apply the map function to the output" <|
                 \maybeX ->
                     T.transduce
                         (TMaybe.maybe |-> T.mapOutput (Maybe.map ((+) 1)))
