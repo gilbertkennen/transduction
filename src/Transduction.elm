@@ -6,6 +6,7 @@ module Transduction
         , isHalted
         , halt
         , transducer
+        , forcedTransducer
         , simpleTransducer
         , unit
         , finish
@@ -25,7 +26,7 @@ module Transduction
 
 Functions from this section should not be required by end-users.
 
-@docs transducer, simpleTransducer, reduce, emit, finish, finishWith, halt, isHalted, unit
+@docs transducer, forcedTransducer, simpleTransducer, reduce, emit, finish, finishWith, halt, isHalted, unit
 
 -}
 
@@ -104,12 +105,35 @@ isHalted (Reducer reducerF _) =
 
 
 {-| Make a transducer.
+
+Checks if the `Reducer` is halted and if so, simply halts. This prevents the first element from emitting if nothing is going to happen.
+
 -}
 transducer :
     (thisInput -> Reducer afterInput afterOutput -> Reducer thisInput thisOutput)
     -> (Reducer afterInput afterOutput -> thisOutput)
     -> Transducer afterInput afterOutput thisInput thisOutput
 transducer mapReduce mapFinish reducer =
+    case reducer of
+        Reducer Nothing _ ->
+            Reducer Nothing (\() -> mapFinish reducer)
+
+        _ ->
+            Reducer
+                (Just (flip mapReduce reducer))
+                (\() -> mapFinish reducer)
+
+
+{-| Make a transducer.
+
+Always wraps the `Reducer` even if it is halted. This is good for when your `Transducer` has useful effects even if there is nothing to emit to.
+
+-}
+forcedTransducer :
+    (thisInput -> Reducer afterInput afterOutput -> Reducer thisInput thisOutput)
+    -> (Reducer afterInput afterOutput -> thisOutput)
+    -> Transducer afterInput afterOutput thisInput thisOutput
+forcedTransducer mapReduce mapFinish reducer =
     Reducer
         (Just (flip mapReduce reducer))
         (\() -> mapFinish reducer)

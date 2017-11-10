@@ -37,6 +37,7 @@ import Transduction
         ( Reducer
         , Transducer
         , transducer
+        , forcedTransducer
         , simpleTransducer
         , emit
         , finish
@@ -71,14 +72,14 @@ compose =
 
 {-| An example of a transducer which doesn't care about what reducer it receives. Effectively a `Reducer`, but not technically.
 -}
-last : Transducer Never never input (Maybe input)
+last : Transducer never1 never2 input (Maybe input)
 last =
     lastHelper Nothing
 
 
-lastHelper : Maybe input -> Transducer Never never input (Maybe input)
+lastHelper : Maybe input -> Transducer never1 never2 input (Maybe input)
 lastHelper input =
-    transducer
+    forcedTransducer
         (lastHelper << Just)
         (\_ -> input)
 
