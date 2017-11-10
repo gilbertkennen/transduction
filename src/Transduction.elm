@@ -8,6 +8,7 @@ module Transduction
         , transducer
         , forcedTransducer
         , simpleTransducer
+        , advancedTransducer
         , unit
         , finish
         , finishWith
@@ -26,7 +27,7 @@ module Transduction
 
 Functions from this section should not be required by end-users.
 
-@docs transducer, forcedTransducer, simpleTransducer, reduce, emit, finish, finishWith, halt, isHalted, unit
+@docs transducer, forcedTransducer, simpleTransducer, advancedTransducer, reduce, emit, finish, finishWith, halt, isHalted, unit
 
 -}
 
@@ -148,3 +149,18 @@ simpleTransducer f ((Reducer _ finishF) as reducer) =
     Reducer
         (Just (flip f reducer))
         finishF
+
+
+{-| For when you want all the control.
+
+Only needed if you want to terminate early based on initial state.
+
+-}
+advancedTransducer :
+    Maybe (Reducer afterInput afterOutput -> Maybe (thisInput -> Reducer thisInput thisOutput))
+    -> (Reducer afterInput afterOutput -> thisOutput)
+    -> Transducer afterInput afterOutput thisInput thisOutput
+advancedTransducer maybeMakeReducerF mapFinish reducer =
+    Reducer
+        (Maybe.andThen ((|>) reducer) maybeMakeReducerF)
+        (\() -> mapFinish reducer)

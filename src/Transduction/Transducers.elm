@@ -39,6 +39,7 @@ import Transduction
         , transducer
         , forcedTransducer
         , simpleTransducer
+        , advancedTransducer
         , emit
         , finish
         , finishWith
@@ -138,15 +139,21 @@ repeatedly =
 -}
 take : Int -> Transducer input output input output
 take n =
-    simpleTransducer
-        (\x reducer ->
-            if n <= 0 then
-                finish reducer |> halt
-            else if n == 1 then
-                finishWith x reducer |> halt
-            else
-                emit (take (n - 1)) x reducer
+    advancedTransducer
+        (if n <= 0 then
+            Nothing
+         else
+            Just
+                (\reducer ->
+                    if isHalted reducer then
+                        Nothing
+                    else if n == 1 then
+                        Just (\x -> finishWith x reducer |> halt)
+                    else
+                        Just (\x -> emit (take (n - 1)) x reducer)
+                )
         )
+        (\reducer -> finish reducer)
 
 
 {-| On finish, emits a list of elements received in reverse order.
