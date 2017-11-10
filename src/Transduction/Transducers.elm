@@ -200,7 +200,7 @@ intersperse padding =
     simpleTransducer
         (\x reducer ->
             emit
-                (mapInput (\x -> [ padding, x ]) |> compose (concat TList.stepper))
+                (mapInput (\x -> [ padding, x ]) |> compose (concat TList.emitter))
                 x
                 reducer
         )

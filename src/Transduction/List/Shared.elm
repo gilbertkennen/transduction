@@ -1,12 +1,12 @@
-module Transduction.List.Shared exposing (stepper)
+module Transduction.List.Shared exposing (emitter)
 
 import Transduction as Trans exposing (Reducer)
 
 
 {-| Reduce elements of a `List` in order.
 -}
-stepper : List input -> Reducer input output -> Reducer input output
-stepper xs reducer =
+emitter : List input -> Reducer input output -> Reducer input output
+emitter xs reducer =
     case xs of
         [] ->
             reducer
@@ -15,4 +15,4 @@ stepper xs reducer =
             if Trans.isHalted reducer then
                 reducer
             else
-                stepper rest (Trans.reduce x reducer)
+                emitter rest (Trans.reduce x reducer)

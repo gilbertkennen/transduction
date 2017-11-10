@@ -1,8 +1,8 @@
-module Transduction.List exposing (stepper, concat, transduce)
+module Transduction.List exposing (emitter, concat, transduce)
 
-{-| A stepper function for use with `Transducer`s like `concat`.
+{-| A emitter function for use with `Transducer`s like `concat`.
 
-@docs stepper, concat, transduce
+@docs emitter, concat, transduce
 
 -}
 
@@ -17,16 +17,16 @@ import Transduction.Transducers as Transducers
 
 {-| Reduce elements of a `List` in order.
 -}
-stepper : List input -> Reducer input output -> Reducer input output
-stepper =
-    TListS.stepper
+emitter : List input -> Reducer input output -> Reducer input output
+emitter =
+    TListS.emitter
 
 
 {-| A special concat just for `List`s.
 -}
 concat : Transducer input output (List input) output
 concat =
-    Transducers.concat stepper
+    Transducers.concat emitter
 
 
 {-| Run the transducer against a `List` of inputs.

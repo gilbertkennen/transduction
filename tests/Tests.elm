@@ -88,7 +88,7 @@ transducerSuite =
             [ fuzz (list (list int)) "should send elements in order, deconstructing one level of `List`" <|
                 \xs ->
                     TList.transduce
-                        (T.concat TList.stepper
+                        (T.concat TList.emitter
                             |-> expect (List.concat xs)
                         )
                         xs
@@ -98,7 +98,7 @@ transducerSuite =
                 \xs ->
                     TList.transduce
                         (T.reverse
-                            |-> T.concat TList.stepper
+                            |-> T.concat TList.emitter
                             |-> expect (List.reverse xs)
                         )
                         xs
