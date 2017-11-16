@@ -193,7 +193,7 @@ concatListHelper : Reducer a b -> List a -> Reducer a b
 concatListHelper (Reducer maybeReduceF output) xs =
     case xs of
         [] ->
-            Reducer maybeReduceF output
+            Reducer (concatList maybeReduceF) output
 
         x :: rest ->
             case maybeReduceF of
