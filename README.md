@@ -12,7 +12,7 @@ somethingCrazy xs =
     Transducers.transduce
         ( Transducers.concat TList.stepper
             |> compose (Transducers.mapInput (\x -> List.range 1 x))
-            |> compose (Transducers.concat TCList.stepper)
+            |> compose (Transducers.concat TList.stepper)
             |> compose (Transducers.filter (\x -> x % 2 == 0))
             |> compose (Transducers.take 3)
             |> compose (Transducers.fold (::) [])
