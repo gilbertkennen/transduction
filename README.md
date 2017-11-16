@@ -1,8 +1,6 @@
 # Transduction
 Transducers in Elm
 
-These transducers are designed to produce functions of `Maybe input -> Reply input output`. No special reduction function is required. `input` can be a collection and a transducer will handle tearing it apart.
-
 # Example
 
 ```Elm
