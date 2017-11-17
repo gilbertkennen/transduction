@@ -28,9 +28,9 @@ somethingCrazy [3, 7, 9, 87, 2^500 + 1]
 ```
 
 The part in parentheses is defining the transducer itself. The first step is at the top and the last step at the bottom.
-`concat` takes a stepper which knows about a particular sort of collection. When it recieves that collection (in this case a `List`) it will emit elements from it one-by-one until it is empty. We will eventually pass in `xs`, so let's just follow that. The first value it emits is `3`.
+`concat` takes a stepper which knows about a particular sort of collection. When it receives that collection (in this case a `List`) it will emit elements from it one-by-one until it is empty. We will eventually pass in `xs`, so let's just follow that. The first value it emits is `3`.
 `mapInput` will then turn that into `[1, 2, 3]` and emit it.
-`concat` (armed with a stepper for `List`s) will send the elements of the list it was given down one at a time, beginning with `1`.
+`concat` (armed with a stepper for `List`) will send the elements of the list it was given down one at a time, beginning with `1`.
 `filter` then checks if the value is even and deciding not, does not emit. It returns back up the transducer stack until something stops it.
 `concat` still has elements to emit, so it emits `2`.
 `filter` then checks and finds that it is even, which it is, and emits `2`.
@@ -41,12 +41,12 @@ Now `concat` is out of elements, so it lets the reply bubble back up until the f
 This turns into `[1, 2, 3, 4, 5, 6, 7]`, `1` gets filtered out, `2` is kept, `3` is filtered out, `4` is kept, but now `take` is out of elements. It finishes and halts.
 When `fold` sees a `Nothing` it emits its current state, in this case `Just [4, 2, 2]`.
 `mapInput` applies `List.reverse` and emits `Just [2, 2, 4]`
-After we get here, the final step is to cap off the end of the `Transducer` with `Transduction.last`. This will halt the first time it recieves a value and sends that value back up wrapped in `Just`. This transducer is so simple that `transduce` automatically appends it.
+After we get here, the final step is to cap off the end of the `Transducer` with `Transducers.last`. This will halt the first time it recieves a value and sends that value back up wrapped in `Just`. This transducer is so simple that `transduce` automatically appends it.
 In the end, we are left with `Just [2, 2, 4]`.
 
 # Terminology
 
-* `Reducer` - A data type which can either reduce or finish. You can't make these from scratch, but you can wrap them with `Transducer`s.
+* `Reducer` - A data type which can either reduce or finish. You can't make these from scratch, but you can wrap them with a `Transducer`.
 * `Transducer` - A function of `Reducer afterInput afterOutput -> Reducer thisInput thisOutput`. It wraps a `Reducer` producing a new one.
 * ingest - accept a value from outside.
 * emit - pass a value to an inner `Reducer`
