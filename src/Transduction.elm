@@ -43,8 +43,8 @@ type Reducer input output
 
 {-| A `Transducer` is a function which wraps a `Reducer` producing a new `Reducer`.
 -}
-type alias Transducer afterInput afterOutput thisInput thisOutput =
-    Reducer afterInput afterOutput -> Reducer thisInput thisOutput
+type alias Transducer reducerInput reducerOutput thisInput thisOutput =
+    Reducer reducerInput reducerOutput -> Reducer thisInput thisOutput
 
 
 {-| A basic `Reducer` which is halted and outputs `()`
@@ -83,9 +83,9 @@ finishWith x reducer =
 {-| Emit a value mapping the reply.
 -}
 emit :
-    Transducer afterInput afterOutput thisInput thisOutput
-    -> afterInput
-    -> Reducer afterInput afterOutput
+    Transducer reducerInput reducerOutput thisInput thisOutput
+    -> reducerInput
+    -> Reducer reducerInput reducerOutput
     -> Reducer thisInput thisOutput
 emit trans x reducer =
     trans (reduce x reducer)
@@ -111,9 +111,9 @@ Checks if the `Reducer` is halted and if so, simply halts. This prevents the fir
 
 -}
 transducer :
-    (thisInput -> Reducer afterInput afterOutput -> Reducer thisInput thisOutput)
-    -> (Reducer afterInput afterOutput -> thisOutput)
-    -> Transducer afterInput afterOutput thisInput thisOutput
+    (thisInput -> Reducer reducerInput reducerOutput -> Reducer thisInput thisOutput)
+    -> (Reducer reducerInput reducerOutput -> thisOutput)
+    -> Transducer reducerInput reducerOutput thisInput thisOutput
 transducer mapReduce mapFinish reducer =
     case reducer of
         Reducer Nothing _ ->
@@ -131,9 +131,9 @@ Always wraps the `Reducer` even if it is halted. This is good for when your `Tra
 
 -}
 forcedTransducer :
-    (thisInput -> Reducer afterInput afterOutput -> Reducer thisInput thisOutput)
-    -> (Reducer afterInput afterOutput -> thisOutput)
-    -> Transducer afterInput afterOutput thisInput thisOutput
+    (thisInput -> Reducer reducerInput reducerOutput -> Reducer thisInput thisOutput)
+    -> (Reducer reducerInput reducerOutput -> thisOutput)
+    -> Transducer reducerInput reducerOutput thisInput thisOutput
 forcedTransducer mapReduce mapFinish reducer =
     Reducer
         (Just (flip mapReduce reducer))
@@ -143,8 +143,8 @@ forcedTransducer mapReduce mapFinish reducer =
 {-| Make a simple transducer which doesn't do anything fancy on finish.
 -}
 simpleTransducer :
-    (thisInput -> Reducer afterInput output -> Reducer thisInput output)
-    -> Transducer afterInput output thisInput output
+    (thisInput -> Reducer reducerInput output -> Reducer thisInput output)
+    -> Transducer reducerInput output thisInput output
 simpleTransducer f ((Reducer _ finishF) as reducer) =
     Reducer
         (Just (flip f reducer))
@@ -157,9 +157,9 @@ Only needed if you want to terminate early based on initial state.
 
 -}
 advancedTransducer :
-    Maybe (Reducer afterInput afterOutput -> Maybe (thisInput -> Reducer thisInput thisOutput))
-    -> (Reducer afterInput afterOutput -> thisOutput)
-    -> Transducer afterInput afterOutput thisInput thisOutput
+    Maybe (Reducer reducerInput reducerOutput -> Maybe (thisInput -> Reducer thisInput thisOutput))
+    -> (Reducer reducerInput reducerOutput -> thisOutput)
+    -> Transducer reducerInput reducerOutput thisInput thisOutput
 advancedTransducer maybeMakeReducerF mapFinish reducer =
     Reducer
         (Maybe.andThen ((|>) reducer) maybeMakeReducerF)

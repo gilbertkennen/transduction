@@ -47,7 +47,7 @@ In the end, we are left with `Just [2, 2, 4]`.
 # Terminology
 
 * `Reducer` - A data type which can either reduce or finish. You can't make these from scratch, but you can wrap them with a `Transducer`.
-* `Transducer` - A function of `Reducer afterInput afterOutput -> Reducer thisInput thisOutput`. It wraps a `Reducer` producing a new one.
+* `Transducer` - A function of `Reducer reducerInput reducerOutput -> Reducer thisInput thisOutput`. It wraps a `Reducer` producing a new one.
 * ingest - accept a value from outside.
 * emit - pass a value to an inner `Reducer`
 

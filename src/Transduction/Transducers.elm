@@ -53,7 +53,7 @@ import Transduction.List.Shared as TList
 
 {-| Actually apply your transducer. Automatically composes `last` to the end.
 -}
-transduce : Transducer afterInput (Maybe afterInput) thisInput thisOutput -> thisInput -> thisOutput
+transduce : Transducer reducerInput (Maybe reducerInput) thisInput thisOutput -> thisInput -> thisOutput
 transduce trans x =
     finishWith x (compose last trans unit)
 
@@ -64,9 +64,9 @@ transduce trans x =
 
 -}
 compose :
-    Transducer afterInput afterOutput middleInput middleOutput
+    Transducer reducerInput reducerOutput middleInput middleOutput
     -> Transducer middleInput middleOutput thisInput thisOutput
-    -> Transducer afterInput afterOutput thisInput thisOutput
+    -> Transducer reducerInput reducerOutput thisInput thisOutput
 compose =
     (>>)
 
@@ -99,7 +99,7 @@ concat stepper =
 
 {-| Maps inputs.
 -}
-mapInput : (thisInput -> afterInput) -> Transducer afterInput output thisInput output
+mapInput : (thisInput -> reducerInput) -> Transducer reducerInput output thisInput output
 mapInput f =
     simpleTransducer
         (\x reducer ->
@@ -309,7 +309,7 @@ doRepeat n x reducer =
 
 {-| Map the transducer output value.
 -}
-mapOutput : (afterOutput -> thisOutput) -> Transducer input afterOutput input thisOutput
+mapOutput : (reducerOutput -> thisOutput) -> Transducer input reducerOutput input thisOutput
 mapOutput f =
     transducer
         (\x reducer ->
@@ -323,3 +323,42 @@ mapOutput f =
 withDefault : output -> Transducer input (Maybe output) input output
 withDefault value =
     mapOutput (Maybe.withDefault value)
+
+
+zipElements : Bool -> (thisInput -> Maybe ( reducerInput, thisInput )) -> Transducer reducerInput output thisInput output
+zipElements =
+    zipElementsHelper []
+
+
+zipElementsHelper : List ( reducerInput, thisInput ) -> Bool -> (thisInput -> Maybe ( reducerInput, thisInput )) -> Transducer reducerInput output thisInput output
+zipElementsHelper collections haltOnEmpty elementF =
+    transducer
+        (\x reducer ->
+            case elementF x of
+                Nothing ->
+                    if haltOnEmpty then
+                        finish reducer |> halt
+                    else
+                        zipElementsHelper collections haltOnEmpty elementF reducer
+
+                Just ( n, rest ) ->
+                    let
+                        newReducer =
+                            reduce n reducer
+                    in
+                        if isHalted newReducer then
+                            zipElementsHelper [] haltOnEmpty elementF newReducer
+                        else
+                            case elementF rest of
+                                Nothing ->
+                                    if haltOnEmpty then
+                                        finish reducer |> halt
+                                    else
+                                        zipElementsHelper collections haltOnEmpty elementF newReducer
+
+                                Just pair ->
+                                    zipElementsHelper (pair :: collections) haltOnEmpty elementF newReducer
+        )
+        (\reducer ->
+            finish reducer
+        )
