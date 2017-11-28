@@ -19,6 +19,7 @@ module Transduction.Transducers
         , mapInput
         , mapOutput
         , withDefault
+        , zipElements
         )
 
 {-| Actual `Transducer` implementations.
@@ -28,7 +29,7 @@ module Transduction.Transducers
 
 # Transducers
 
-@docs last, mapInput, mapOutput, fold, concat, take, repeatedly, reverse, filter, drop, intersperse, isEmpty, length, member, partition, repeat, withDefault
+@docs last, mapInput, mapOutput, fold, concat, take, repeatedly, reverse, filter, drop, intersperse, isEmpty, length, member, partition, repeat, withDefault, zipElements
 
 -}
 
@@ -325,12 +326,21 @@ withDefault value =
     mapOutput (Maybe.withDefault value)
 
 
-zipElements : Bool -> (thisInput -> Maybe ( reducerInput, thisInput )) -> Transducer reducerInput output thisInput output
+{-| Takes several collections and sends the head of each one before sending the second element. If the first argument is `True`, then it will stop when a collection is empty, but if it is `False` it will just skip empty collections.
+-}
+zipElements :
+    Bool
+    -> (thisInput -> Maybe ( reducerInput, thisInput ))
+    -> Transducer reducerInput output thisInput output
 zipElements =
     zipElementsHelper []
 
 
-zipElementsHelper : List ( reducerInput, thisInput ) -> Bool -> (thisInput -> Maybe ( reducerInput, thisInput )) -> Transducer reducerInput output thisInput output
+zipElementsHelper :
+    List thisInput
+    -> Bool
+    -> (thisInput -> Maybe ( reducerInput, thisInput ))
+    -> Transducer reducerInput output thisInput output
 zipElementsHelper collections haltOnEmpty elementF =
     transducer
         (\x reducer ->
@@ -342,23 +352,41 @@ zipElementsHelper collections haltOnEmpty elementF =
                         zipElementsHelper collections haltOnEmpty elementF reducer
 
                 Just ( n, rest ) ->
-                    let
-                        newReducer =
-                            reduce n reducer
-                    in
-                        if isHalted newReducer then
-                            zipElementsHelper [] haltOnEmpty elementF newReducer
-                        else
-                            case elementF rest of
-                                Nothing ->
-                                    if haltOnEmpty then
-                                        finish reducer |> halt
-                                    else
-                                        zipElementsHelper collections haltOnEmpty elementF newReducer
+                    emit (zipElementsHelper (rest :: collections) haltOnEmpty elementF) n reducer
+        )
+        (zipElementsFinisher collections [] haltOnEmpty elementF)
 
-                                Just pair ->
-                                    zipElementsHelper (pair :: collections) haltOnEmpty elementF newReducer
-        )
-        (\reducer ->
-            finish reducer
-        )
+
+zipElementsFinisher :
+    List collection
+    -> List collection
+    -> Bool
+    -> (collection -> Maybe ( element, collection ))
+    -> Reducer element output
+    -> output
+zipElementsFinisher nextCollections currentCollections haltOnEmpty elementF reducer =
+    if isHalted reducer then
+        finish reducer
+    else
+        case currentCollections of
+            [] ->
+                if List.isEmpty nextCollections then
+                    finish reducer
+                else
+                    zipElementsFinisher [] (List.reverse nextCollections) haltOnEmpty elementF reducer
+
+            coll :: rest ->
+                case elementF coll of
+                    Nothing ->
+                        if haltOnEmpty then
+                            finish reducer
+                        else
+                            zipElementsFinisher nextCollections rest haltOnEmpty elementF reducer
+
+                    Just ( x, next ) ->
+                        zipElementsFinisher
+                            (next :: nextCollections)
+                            rest
+                            haltOnEmpty
+                            elementF
+                            (emit identity x reducer)

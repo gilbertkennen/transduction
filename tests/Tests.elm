@@ -223,4 +223,41 @@ transducerSuite =
                         maybeX
                         |> Expect.equal (Maybe.withDefault 0 maybeX)
             ]
+        , describe "zipElements"
+            [ fuzz (list (list unit)) "should emit an element for each in a list when set to not halt on empty" <|
+                (\listOfLists ->
+                    TList.transduce
+                        (T.zipElements False listEmitter
+                            |-> T.length
+                            |-> expect [ listOfLists |> List.map List.length |> List.sum ]
+                        )
+                        listOfLists
+                )
+            , test "should emit items in order" <|
+                \() ->
+                    TList.transduce
+                        (T.zipElements False listEmitter
+                            |-> expect [ 1, 4, 6, 7, 2, 5, 8, 3 ]
+                        )
+                        [ [ 1, 2, 3 ], [ 4, 5 ], [ 6 ], [ 7, 8 ] ]
+            ]
+        , test "should not emit items after reaching an empty list when set to halt on empty" <|
+            \() ->
+                TList.transduce
+                    (T.zipElements True listEmitter
+                        |-> expect [ 1, 4, 6, 7, 2, 5 ]
+                    )
+                    [ [ 1, 2, 3 ], [ 4, 5 ], [ 6 ], [ 7, 8 ] ]
+        , test "should even halt early if ingesting an empty collection" <|
+            \() ->
+                TList.transduce
+                    (T.zipElements True listEmitter
+                        |-> expect [ 1, 4 ]
+                    )
+                    [ [ 1, 2, 3 ], [ 4, 5 ], [], [ 6 ], [ 7, 8 ] ]
         ]
+
+
+listEmitter : List a -> Maybe ( a, List a )
+listEmitter xs =
+    Maybe.map2 (,) (List.head xs) (List.tail xs)
