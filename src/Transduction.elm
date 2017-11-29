@@ -31,6 +31,8 @@ Functions from this section should not be required by end-users.
 
 -}
 
+import Lazy exposing (Lazy, lazy, force)
+
 
 {-| You can't make your own base reducers, just wrap functions around those contained within.
 
@@ -38,7 +40,7 @@ All reducers are based upon a base reducer which returns `Nothing` if no value h
 
 -}
 type Reducer input output
-    = Reducer (Maybe (input -> Reducer input output)) (() -> output)
+    = Reducer (Maybe (input -> Reducer input output)) (Lazy output)
 
 
 {-| A `Transducer` is a function which wraps a `Reducer` producing a new `Reducer`.
@@ -69,8 +71,8 @@ reduce x ((Reducer reduceF _) as reducer) =
 {-| Calculate the finished value of a `Reducer`.
 -}
 finish : Reducer input output -> output
-finish (Reducer _ finishF) =
-    finishF ()
+finish (Reducer _ finish) =
+    force finish
 
 
 {-| It's very common to want to reduce one more value before finishing.
@@ -95,7 +97,7 @@ emit trans x reducer =
 -}
 halt : output -> Reducer input output
 halt x =
-    Reducer Nothing (\() -> x)
+    Reducer Nothing (lazy (\() -> x))
 
 
 {-| Checks if the `Reducer` is in a halted state.
@@ -117,12 +119,12 @@ transducer :
 transducer mapReduce mapFinish reducer =
     case reducer of
         Reducer Nothing _ ->
-            Reducer Nothing (\() -> mapFinish reducer)
+            Reducer Nothing (lazy (\() -> mapFinish reducer))
 
         _ ->
             Reducer
                 (Just (flip mapReduce reducer))
-                (\() -> mapFinish reducer)
+                (lazy (\() -> mapFinish reducer))
 
 
 {-| Make a transducer.
@@ -137,7 +139,7 @@ forcedTransducer :
 forcedTransducer mapReduce mapFinish reducer =
     Reducer
         (Just (flip mapReduce reducer))
-        (\() -> mapFinish reducer)
+        (lazy (\() -> mapFinish reducer))
 
 
 {-| Make a simple transducer which doesn't do anything fancy on finish.
@@ -163,4 +165,4 @@ advancedTransducer :
 advancedTransducer maybeMakeReducerF mapFinish reducer =
     Reducer
         (Maybe.andThen ((|>) reducer) maybeMakeReducerF)
-        (\() -> mapFinish reducer)
+        (lazy (\() -> mapFinish reducer))
