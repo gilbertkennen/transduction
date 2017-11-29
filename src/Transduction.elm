@@ -12,7 +12,6 @@ module Transduction
         , unit
         , finish
         , finishWith
-        , emit
         )
 
 {-| Transducers are composable structures which process elements one at a time.
@@ -27,7 +26,7 @@ module Transduction
 
 Functions from this section should not be required by end-users.
 
-@docs transducer, forcedTransducer, simpleTransducer, advancedTransducer, reduce, emit, finish, finishWith, halt, isHalted, unit
+@docs transducer, forcedTransducer, simpleTransducer, advancedTransducer, reduce, finish, finishWith, halt, isHalted, unit
 
 -}
 
@@ -80,17 +79,6 @@ finish (Reducer _ finish) =
 finishWith : input -> Reducer input output -> output
 finishWith x reducer =
     reduce x reducer |> finish
-
-
-{-| Emit a value mapping the reply.
--}
-emit :
-    Transducer reducerInput reducerOutput thisInput thisOutput
-    -> reducerInput
-    -> Reducer reducerInput reducerOutput
-    -> Reducer thisInput thisOutput
-emit trans x reducer =
-    trans (reduce x reducer)
 
 
 {-| Produce a `Reducer` which is in a halted state.

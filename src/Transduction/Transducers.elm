@@ -42,7 +42,6 @@ import Transduction
         , forcedTransducer
         , simpleTransducer
         , advancedTransducer
-        , emit
         , finish
         , finishWith
         , halt
@@ -105,7 +104,7 @@ mapInput : (thisInput -> reducerInput) -> Transducer reducerInput output thisInp
 mapInput f =
     simpleTransducer
         (\x reducer ->
-            emit (mapInput f) (f x) reducer
+            mapInput f (reduce (f x) reducer)
         )
 
 
@@ -152,7 +151,7 @@ take n =
                     else if n == 1 then
                         Just (\x -> finishWith x reducer |> halt)
                     else
-                        Just (\x -> emit (take (n - 1)) x reducer)
+                        Just (\x -> take (n - 1) (reduce x reducer))
                 )
         )
         (\reducer -> finish reducer)
@@ -183,7 +182,7 @@ filter predicate =
     simpleTransducer
         (\x reducer ->
             if predicate x then
-                emit (filter predicate) x reducer
+                filter predicate (reduce x reducer)
             else
                 filter predicate reducer
         )
@@ -196,7 +195,7 @@ drop n =
     simpleTransducer
         (\x reducer ->
             if n <= 0 then
-                emit identity x reducer
+                reduce x reducer
             else
                 drop (n - 1) reducer
         )
@@ -208,10 +207,10 @@ intersperse : input -> Transducer input output input output
 intersperse padding =
     simpleTransducer
         (\x reducer ->
-            emit
-                (mapInput (\x -> [ padding, x ]) |> compose (concat TList.emitter))
-                x
-                reducer
+            (mapInput (\x -> [ padding, x ])
+                |> compose (concat TList.emitter)
+            )
+                (reduce x reducer)
         )
 
 
@@ -315,7 +314,7 @@ mapOutput : (reducerOutput -> thisOutput) -> Transducer input reducerOutput inpu
 mapOutput f =
     transducer
         (\x reducer ->
-            emit (mapOutput f) x reducer
+            mapOutput f (reduce x reducer)
         )
         (f << finish)
 
@@ -353,7 +352,7 @@ zipElementsHelper collections haltOnEmpty elementF =
                         zipElementsHelper collections haltOnEmpty elementF reducer
 
                 Just ( n, rest ) ->
-                    emit (zipElementsHelper (rest :: collections) haltOnEmpty elementF) n reducer
+                    zipElementsHelper (rest :: collections) haltOnEmpty elementF (reduce n reducer)
         )
         (zipElementsFinisher collections [] haltOnEmpty elementF)
 
@@ -390,7 +389,7 @@ zipElementsFinisher nextCollections currentCollections haltOnEmpty elementF redu
                             rest
                             haltOnEmpty
                             elementF
-                            (emit identity x reducer)
+                            (reduce x reducer)
 
 
 {-| Uses the function to find the element which beats them all. Emits `Nothing` if no items ingested. Emits `Just x` if only one item is ingested. Otherwise replaces this item if the function returns true (new elements are the first argument to the function).
