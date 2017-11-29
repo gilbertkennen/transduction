@@ -20,6 +20,7 @@ module Transduction.Transducers
         , mapOutput
         , withDefault
         , zipElements
+        , compareBy
         )
 
 {-| Actual `Transducer` implementations.
@@ -29,7 +30,7 @@ module Transduction.Transducers
 
 # Transducers
 
-@docs last, mapInput, mapOutput, fold, concat, take, repeatedly, reverse, filter, drop, intersperse, isEmpty, length, member, partition, repeat, withDefault, zipElements
+@docs last, mapInput, mapOutput, fold, concat, take, repeatedly, reverse, filter, drop, intersperse, isEmpty, length, member, partition, repeat, withDefault, zipElements, compareBy
 
 -}
 
@@ -390,3 +391,31 @@ zipElementsFinisher nextCollections currentCollections haltOnEmpty elementF redu
                             haltOnEmpty
                             elementF
                             (emit identity x reducer)
+
+
+{-| Uses the function to find the element which beats them all. Emits `Nothing` if no items ingested. Emits `Just x` if only one item is ingested. Otherwise replaces this item if the function returns true (new elements are the first argument to the function).
+-}
+compareBy : (input -> input -> Bool) -> Transducer (Maybe input) output input output
+compareBy =
+    compareByHelper Nothing
+
+
+compareByHelper : Maybe input -> (input -> input -> Bool) -> Transducer (Maybe input) output input output
+compareByHelper current f =
+    transducer
+        (\x ->
+            compareByHelper
+                (current
+                    |> Maybe.map
+                        (\c ->
+                            if f x c then
+                                x
+                            else
+                                c
+                        )
+                    |> Maybe.withDefault x
+                    |> Just
+                )
+                f
+        )
+        (finishWith current)

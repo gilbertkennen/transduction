@@ -240,21 +240,28 @@ transducerSuite =
                             |-> expect [ 1, 4, 6, 7, 2, 5, 8, 3 ]
                         )
                         [ [ 1, 2, 3 ], [ 4, 5 ], [ 6 ], [ 7, 8 ] ]
+            , test "should not emit items after reaching an empty list when set to halt on empty" <|
+                \() ->
+                    TList.transduce
+                        (T.zipElements True listEmitter
+                            |-> expect [ 1, 4, 6, 7, 2, 5 ]
+                        )
+                        [ [ 1, 2, 3 ], [ 4, 5 ], [ 6 ], [ 7, 8 ] ]
+            , test "should even halt early if ingesting an empty collection" <|
+                \() ->
+                    TList.transduce
+                        (T.zipElements True listEmitter
+                            |-> expect [ 1, 4 ]
+                        )
+                        [ [ 1, 2, 3 ], [ 4, 5 ], [], [ 6 ], [ 7, 8 ] ]
             ]
-        , test "should not emit items after reaching an empty list when set to halt on empty" <|
-            \() ->
-                TList.transduce
-                    (T.zipElements True listEmitter
-                        |-> expect [ 1, 4, 6, 7, 2, 5 ]
-                    )
-                    [ [ 1, 2, 3 ], [ 4, 5 ], [ 6 ], [ 7, 8 ] ]
-        , test "should even halt early if ingesting an empty collection" <|
-            \() ->
-                TList.transduce
-                    (T.zipElements True listEmitter
-                        |-> expect [ 1, 4 ]
-                    )
-                    [ [ 1, 2, 3 ], [ 4, 5 ], [], [ 6 ], [ 7, 8 ] ]
+        , describe "compareBy"
+            [ fuzz (list int) "should correctly get maximum using `>`" <|
+                \xs ->
+                    TList.transduce
+                        (T.compareBy (>) |-> expect [ List.maximum xs ])
+                        xs
+            ]
         ]
 
 
