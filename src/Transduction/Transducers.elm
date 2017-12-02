@@ -21,6 +21,7 @@ module Transduction.Transducers
         , withDefault
         , zipElements
         , compareBy
+        , combinations
         )
 
 {-| Actual `Transducer` implementations.
@@ -30,7 +31,7 @@ module Transduction.Transducers
 
 # Transducers
 
-@docs last, mapInput, mapOutput, fold, concat, take, repeatedly, reverse, filter, drop, intersperse, isEmpty, length, member, partition, repeat, withDefault, zipElements, compareBy
+@docs last, mapInput, mapOutput, fold, concat, take, repeatedly, reverse, filter, drop, intersperse, isEmpty, length, member, partition, repeat, withDefault, zipElements, compareBy, combinations
 
 -}
 
@@ -50,6 +51,7 @@ import Transduction
         , reduce
         )
 import Transduction.List.Shared as TList
+import Lazy.List exposing (LazyList)
 
 
 {-| Actually apply your transducer. Automatically composes `last` to the end.
@@ -418,3 +420,22 @@ compareByHelper current f =
                 f
         )
         (finishWith current)
+
+
+{-| Emits pairs of combinations for all values seen so far.
+-}
+combinations : Transducer ( input, input ) output input output
+combinations reducer =
+    combinationsHelper [] (concat TList.lazyEmitter reducer)
+
+
+combinationsHelper : List input -> Transducer (LazyList ( input, input )) output input output
+combinationsHelper xs =
+    simpleTransducer
+        (\x reducer ->
+            xs
+                |> Lazy.List.fromList
+                |> Lazy.List.map (\y -> ( y, x ))
+                |> flip reduce reducer
+                |> combinationsHelper (xs ++ [ x ])
+        )
