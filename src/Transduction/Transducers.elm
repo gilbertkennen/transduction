@@ -75,8 +75,13 @@ compose =
 
 
 {-| An example of a transducer which doesn't care about what reducer it receives. Effectively a `Reducer`, but not technically.
+
+While it *could* chain with any transducer, since it can't actually interact, the type means it only works with transducers/reducers which don't do anything.
+
+This transducer is automatically added to the end of a transducer chain when using `transduce`. This is to encourage you to make transducers which emit their final output instead of simply returning it. Combining this with `withDefault` will overcome the `Maybe`. I *think* that `last` is the only one of these pseudo-reducers you should actually need in normal practice.
+
 -}
-last : Transducer never1 never2 input (Maybe input)
+last : Transducer Never () input (Maybe input)
 last =
     lastHelper Nothing
 
