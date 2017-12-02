@@ -1,12 +1,12 @@
 module Transduction.List.Shared exposing (emitter, lazyEmitter)
 
-import Transduction as Trans exposing (Reducer)
+import Transduction as Trans exposing (Transducer)
 import Lazy.List exposing (LazyList)
 
 
 {-| Reduce elements of a `List` in order.
 -}
-emitter : List input -> Reducer input output -> Reducer input output
+emitter : List input -> Transducer input output input output
 emitter xs reducer =
     case xs of
         [] ->
@@ -19,7 +19,7 @@ emitter xs reducer =
                 emitter rest (Trans.reduce x reducer)
 
 
-lazyEmitter : LazyList input -> Reducer input output -> Reducer input output
+lazyEmitter : LazyList input -> Transducer input output input output
 lazyEmitter xs reducer =
     if Trans.isHalted reducer then
         reducer

@@ -16,7 +16,7 @@ import Transduction.Transducers as Transducers
 
 {-| When you only want to emit when you have a value.
 -}
-emitter : Maybe input -> Reducer input output -> Reducer input output
+emitter : Maybe input -> Transducer input output input output
 emitter maybeX reducer =
     case maybeX of
         Nothing ->
