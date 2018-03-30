@@ -1,17 +1,15 @@
 module Transduction
     exposing
         ( Transducer
-        , Reducer
-        , reduce
-        , isHalted
-        , halt
-        , transducer
-        , forcedTransducer
-        , simpleTransducer
-        , advancedTransducer
-        , unit
-        , finish
-        , finishWith
+        , TransducerStatus(..)
+        , compose
+        , terminate
+        , waitForInput
+        , produce
+        , terminateSignal
+        , push
+        , pop
+        , status
         )
 
 {-| Transducers are composable structures which process elements one at a time.
@@ -19,138 +17,221 @@ module Transduction
 
 # Types
 
-@docs Reducer, Transducer
+@docs Transducer
 
 
-# Construction
+# Basic Transducers
 
-Functions from this section should not be required by end-users.
+@docs waitForInput, produce, terminate
 
-@docs transducer, forcedTransducer, simpleTransducer, advancedTransducer, reduce, finish, finishWith, halt, isHalted, unit
+
+# Composition
+
+@docs compose
+
+
+# Doing Work
+
+@docs push, pop, TransducerStatus, status, terminateSignal
 
 -}
 
+import Queue exposing (Queue)
 import Lazy exposing (Lazy, lazy, force)
 
 
-{-| You can't make your own base reducers, just wrap functions around those contained within.
+{-| A transducer takes inputs from a wire and sends outputs on a wire, can terminate, and can take an end-of-computation signal.
+-}
+type Transducer input output
+    = Use (() -> Transducer input output) (input -> Transducer input output)
+    | Produce (Queue input) output (Lazy (Transducer input output))
+    | Term
+    | Delay (Queue input) (Lazy (Transducer input output))
 
-All reducers are based upon a base reducer which returns `Nothing` if no value has been consumed or halts with `Just x` the first time it receives a value.
+
+{-| The current status of a transducer. `Producing` gives you the value on the output wire and the next version of the transducer.
+-}
+type TransducerStatus input output
+    = Terminated
+    | WaitingForInput
+    | Producing output (Transducer input output)
+
+
+{-| Two transducers with a common interface can be composed into a single transducer.
+
+    Takes inputs in seemingly backward order in order to facilitate `first |> compose second` style pipelines.
 
 -}
-type Reducer input output
-    = Reducer (Maybe (input -> Reducer input output)) (Lazy output)
+compose : Transducer a output -> Transducer input a -> Transducer input output
+compose transR transL =
+    case transR of
+        Term ->
+            -- Term on the right, ignore the left. Term base case.
+            Term
+
+        Produce queueR outputR lazyContR ->
+            -- Processing waits until the output wire is clear. Produce base case.
+            Produce
+                Queue.empty
+                outputR
+                (Lazy.map
+                    (\transFRNew ->
+                        -- Process the right-hand queue before looking left.
+                        transL |> compose (processQueue queueR transFRNew)
+                    )
+                    lazyContR
+                )
+
+        Delay queueR lazyContR ->
+            -- The work hasn't been done yet, nothing to see here.
+            transL |> compose (continueWith queueR lazyContR)
+
+        Use transTermFR transUseFR ->
+            case transL of
+                Use transTermFL transUseFL ->
+                    -- If both
+                    Use
+                        -- If both are waiting, then the whole thing is waiting. Use base case.
+                        (\() -> transTermFL () |> compose transR)
+                        (\input -> transUseFL input |> compose transR)
+
+                Produce queueL outputL lazyContL ->
+                    -- The interface wire has a product, send it to the right transducer and see what happens.
+                    Delay queueL lazyContL |> compose (transUseFR outputL)
+
+                Term ->
+                    -- Term signals propagate to the right. Once the right stops producing, we force Term.
+                    Term
+                        |> compose
+                            (case transTermFR () of
+                                Use _ _ ->
+                                    -- Waiting for input is not allowed after receiving term signal.
+                                    Term
+
+                                transRNew ->
+                                    transRNew
+                            )
+
+                Delay queueL lazyContL ->
+                    -- The right transducer is waiting for the left transducer to produce something. Better figure out if it has anything to produce.
+                    continueWith queueL lazyContL |> compose transR
 
 
-{-| A `Transducer` is a function which wraps a `Reducer` producing a new `Reducer`.
+{-| Push an input into the transducer. `Nothing` represents a termination signal. All pushing is lazy, so the work won't be done until you check the transducer's status.
 -}
-type alias Transducer reducerInput reducerOutput thisInput thisOutput =
-    Reducer reducerInput reducerOutput -> Reducer thisInput thisOutput
+push : input -> Transducer input output -> Transducer input output
+push input trans =
+    case trans of
+        Term ->
+            Term
+
+        Use transTermF transUseF ->
+            -- We don't *actually* need to do this work until something is asking about it, so let's be lazy.
+            Delay Queue.empty (lazy (\() -> transUseF input))
+
+        Produce queue output lazyCont ->
+            -- We are waiting for the out wire to be cleared. Queue any additional work.
+            Produce (Queue.push input queue) output lazyCont
+
+        Delay queue lazyCont ->
+            -- Nobody seems to care if we have anything going right now, so might as well wait until that happens.
+            Delay (Queue.push input queue) lazyCont
 
 
-{-| A basic `Reducer` which is halted and outputs `()`
+{-| When you just want to try to get the current output of the transducer.
 -}
-unit : Reducer a ()
-unit =
-    halt ()
-
-
-{-| Apply the reducer to an input value.
--}
-reduce : input -> Reducer input output -> Reducer input output
-reduce x ((Reducer reduceF _) as reducer) =
-    case reduceF of
-        Nothing ->
-            reducer
-
-        Just f ->
-            f x
-
-
-{-| Calculate the finished value of a `Reducer`.
--}
-finish : Reducer input output -> output
-finish (Reducer _ finish) =
-    force finish
-
-
-{-| It's very common to want to reduce one more value before finishing.
--}
-finishWith : input -> Reducer input output -> output
-finishWith x reducer =
-    reduce x reducer |> finish
-
-
-{-| Produce a `Reducer` which is in a halted state.
--}
-halt : output -> Reducer input output
-halt x =
-    Reducer Nothing (lazy (\() -> x))
-
-
-{-| Checks if the `Reducer` is in a halted state.
--}
-isHalted : Reducer input output -> Bool
-isHalted (Reducer reducerF _) =
-    reducerF == Nothing
-
-
-{-| Make a transducer.
-
-Checks if the `Reducer` is halted and if so, simply halts. This prevents the first element from emitting if nothing is going to happen.
-
--}
-transducer :
-    (thisInput -> Reducer reducerInput reducerOutput -> Reducer thisInput thisOutput)
-    -> (Reducer reducerInput reducerOutput -> thisOutput)
-    -> Transducer reducerInput reducerOutput thisInput thisOutput
-transducer mapReduce mapFinish reducer =
-    case reducer of
-        Reducer Nothing _ ->
-            Reducer Nothing (lazy (\() -> mapFinish reducer))
+pop : Transducer input output -> Maybe output
+pop trans =
+    case trans of
+        Produce _ output _ ->
+            Just output
 
         _ ->
-            Reducer
-                (Just (flip mapReduce reducer))
-                (lazy (\() -> mapFinish reducer))
+            Nothing
 
 
-{-| Make a transducer.
+{-| Query the status of a transducer, getting the value on the output wire if present.
+-}
+status : Transducer input output -> TransducerStatus input output
+status trans =
+    case trans of
+        Term ->
+            Terminated
 
-Always wraps the `Reducer` even if it is halted. This is good for when your `Transducer` has useful effects even if there is nothing to emit to.
+        Use _ _ ->
+            WaitingForInput
+
+        Produce queue output lazyCont ->
+            Producing output (Delay queue lazyCont)
+
+        Delay queue lazyCont ->
+            -- Somebody finally wants to know what we are!
+            status (continueWith queue lazyCont)
+
+
+{-| An internal function which provides queued elements unless the queue is empty or the output wire has an element on it.
+-}
+processQueue : Queue input -> Transducer input output -> Transducer input output
+processQueue queue trans =
+    case trans of
+        Produce otherQueue output lazyCont ->
+            Produce (Queue.append queue otherQueue) output lazyCont
+
+        Term ->
+            trans
+
+        Use transTermF transUseF ->
+            case Queue.pop queue of
+                Nothing ->
+                    trans
+
+                Just ( input, newQueue ) ->
+                    processQueue newQueue (transUseF input)
+
+        Delay queue lazyCont ->
+            processQueue queue (continueWith queue lazyCont)
+
+
+{-| An internal function which processes the queue against a lazy transducer.
+-}
+continueWith :
+    Queue input
+    -> Lazy (Transducer input output)
+    -> Transducer input output
+continueWith queue lazyCont =
+    processQueue queue (force lazyCont)
+
+
+{-| Send terminate signal and halt.
+-}
+terminate : Transducer input output
+terminate =
+    Term
+
+
+{-| Don't send anything down the wire, but you can still set a new transducer state. This is the normal initial state of a transducer and should be used for any custom transducers you might create.
+
+The first function is executed on term signal and the second function is executed on receiving input.
 
 -}
-forcedTransducer :
-    (thisInput -> Reducer reducerInput reducerOutput -> Reducer thisInput thisOutput)
-    -> (Reducer reducerInput reducerOutput -> thisOutput)
-    -> Transducer reducerInput reducerOutput thisInput thisOutput
-forcedTransducer mapReduce mapFinish reducer =
-    Reducer
-        (Just (flip mapReduce reducer))
-        (lazy (\() -> mapFinish reducer))
+waitForInput :
+    (() -> Transducer input output)
+    -> (input -> Transducer input output)
+    -> Transducer input output
+waitForInput =
+    Use
 
 
-{-| Make a simple transducer which doesn't do anything fancy on finish.
+{-| Send something down the wire and then set a new transducer state.
 -}
-simpleTransducer :
-    (thisInput -> Reducer reducerInput output -> Reducer thisInput output)
-    -> Transducer reducerInput output thisInput output
-simpleTransducer f ((Reducer _ finishF) as reducer) =
-    Reducer
-        (Just (flip f reducer))
-        finishF
+produce : output -> (() -> Transducer input output) -> Transducer input output
+produce output lazyTrans =
+    -- I can't think of any good reason to encourage making transducers with existing queues.
+    Produce Queue.empty output (lazy lazyTrans)
 
 
-{-| For when you want all the control.
-
-Only needed if you want to terminate early based on initial state.
-
+{-| Sends a termination signal that waits for the output wire to be empty before completing. You get the exact same effect if you `compose terminate myTransducer`.
 -}
-advancedTransducer :
-    Maybe (Reducer reducerInput reducerOutput -> Maybe (thisInput -> Reducer thisInput thisOutput))
-    -> (Reducer reducerInput reducerOutput -> thisOutput)
-    -> Transducer reducerInput reducerOutput thisInput thisOutput
-advancedTransducer maybeMakeReducerF mapFinish reducer =
-    Reducer
-        (Maybe.andThen ((|>) reducer) maybeMakeReducerF)
-        (lazy (\() -> mapFinish reducer))
+terminateSignal : Transducer input output -> Transducer input output
+terminateSignal trans =
+    Term |> compose trans
